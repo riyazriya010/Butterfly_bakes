@@ -38,7 +38,7 @@ export default function Home() {
                 </button>
               </Link>
 
-              <Link href="/pages/menu">
+              <Link href="/menu">
               <button className="border border-pink-500 text-pink-500 px-8 py-4 rounded-full hover:bg-pink-50 transition">
                 View Menu
               </button>
