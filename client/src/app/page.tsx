@@ -396,6 +396,7 @@ export default function CakeShop() {
             viewport={{ once: true }}
             className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-sm hover:shadow-md border border-stone-100 flex items-start gap-4 z-10 transition-all group"
           >
+            {/** */}
             <div className={`p-3.5 rounded-2xl ${item.bg} group-hover:scale-110 transition-transform shrink-0`}>
               {item.icon}
             </div>
