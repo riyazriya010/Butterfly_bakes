@@ -11,10 +11,6 @@ export interface CreateMenuPayload {
 }
 
 export class MenuRepository {
-    // Create Menu
-    async create(data: CreateMenuPayload) {
-        return await Menu.create(data);
-    }
 
     // Get All Menu
     async getAll() {
@@ -24,19 +20,6 @@ export class MenuRepository {
     // Get Menu By Id
     async getById(id: string) {
         return await Menu.findById(id);
-    }
-
-    // Update Menu
-    async update(id: string, data: Partial<CreateMenuPayload>) {
-        return await Menu.findByIdAndUpdate(id, data, {
-            new: true,
-            runValidators: true,
-        });
-    }
-
-    // Delete Menu
-    async delete(id: string) {
-        return await Menu.findByIdAndDelete(id);
     }
 
 }

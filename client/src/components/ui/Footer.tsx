@@ -82,7 +82,7 @@ export const Footer = () => {
 
         {/* Bottom copyright line */}
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-500 gap-2 text-center sm:text-left">
-          <p>© {new Date().getFullYear()} Butterfly Bakes. All rights reserved.</p>
+          <p>© 2022 Butterfly Bakes. All rights reserved.</p>
           <p className="italic">"Strong women turn humble home kitchens into empires."</p>
         </div>
       </footer>

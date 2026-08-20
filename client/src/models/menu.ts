@@ -6,7 +6,7 @@ export interface IMenu {
   price: number;
   weight: string; // 500g, 1kg, 2kg
   description?: string;
-  image?: string;
+  // image?: string;
   available: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -44,10 +44,10 @@ const MenuSchema = new Schema<IMenu>(
       trim: true,
     },
 
-    image: {
-      type: String,
-      default: "",
-    },
+    // image: {
+    //   type: String,
+    //   default: "",
+    // },
 
     available: {
       type: Boolean,
@@ -57,6 +57,17 @@ const MenuSchema = new Schema<IMenu>(
   {
     timestamps: true,
     versionKey: false,
+  }
+);
+
+MenuSchema.index(
+  {
+    name: 1,
+    flavour: 1,
+    weight: 1,
+  },
+  {
+    unique: true,
   }
 );
 

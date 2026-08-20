@@ -1,6 +1,6 @@
-import AdminMenu from "@/src/components/admin/adminMenu";
+import MenuList from "@/src/components/admin/MenuList";
 
 
-export default function HomePage() {
-  return <AdminMenu />
+export default function AdminLoginPage() {
+  return <MenuList />
 }

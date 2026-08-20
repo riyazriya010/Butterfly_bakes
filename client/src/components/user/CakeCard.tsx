@@ -1,4 +1,4 @@
-import { Sparkles, ShoppingBag } from "lucide-react";
+import { Sparkles, ShoppingBag, AlertCircle } from "lucide-react";
 
 export type MenuItem = {
   _id: string;
@@ -15,6 +15,8 @@ type Props = {
 };
 
 export default function CakeCard({ cake }: Props) {
+  const isAvailable = cake.available !== false; // Defaults to true if undefined
+
   const message = `Hi Butterfly Bakes 👋
 
 I would like to order:
@@ -30,7 +32,11 @@ Please let me know the available sizes and delivery details.`;
   )}`;
 
   return (
-    <div className="rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-6 flex flex-col justify-between relative overflow-hidden group">
+    <div
+      className={`rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-6 flex flex-col justify-between relative overflow-hidden group ${
+        !isAvailable ? "opacity-75" : ""
+      }`}
+    >
       {/* Decorative ambient background blur */}
       <div className="absolute -right-8 -top-8 w-24 h-24 bg-pink-100 dark:bg-pink-950/40 rounded-full blur-2xl group-hover:bg-pink-200 dark:group-hover:bg-pink-900/50 transition-all pointer-events-none" />
 
@@ -43,11 +49,14 @@ Please let me know the available sizes and delivery details.`;
               {cake.flavour}
             </span>
           )}
-          {cake.weight && (
-            <span className="text-xs font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-full ml-auto">
-              {cake.weight}
-            </span>
-          )}
+
+          <div className="flex items-center gap-2 ml-auto">
+            {cake.weight && (
+              <span className="text-xs font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-full">
+                {cake.weight}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Cake Name */}
@@ -57,25 +66,45 @@ Please let me know the available sizes and delivery details.`;
 
         {/* Description */}
         <p className="text-stone-600 dark:text-stone-300 text-xs md:text-sm mt-2 leading-relaxed line-clamp-2">
-          {cake.description || "Freshly baked artisan cake prepared on order using premium ingredients."}
+          {cake.description ||
+            "Freshly baked artisan cake prepared on order using premium ingredients."}
         </p>
       </div>
 
       {/* Footer Info & WhatsApp CTA */}
       <div className="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-3">
         <div>
-          <span className="text-[10px] uppercase text-stone-400 dark:text-stone-500 font-semibold block">Price</span>
-          <span className="text-xl font-bold text-pink-600 dark:text-pink-400">₹{cake.price}</span>
+          <span className="text-[10px] uppercase text-stone-400 dark:text-stone-500 font-semibold block">
+            Price
+          </span>
+          <span className="text-xl font-bold text-pink-600 dark:text-pink-400">
+            ₹{cake.price}
+          </span>
         </div>
 
-        <a
-          href={whatsappLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 dark:bg-pink-500 dark:hover:bg-pink-600 text-white text-xs md:text-sm font-medium px-5 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95"
-        >
-          <ShoppingBag className="w-4 h-4" /> Order Now
-        </a>
+        {isAvailable ? (
+          <a
+            href={whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 dark:bg-pink-500 dark:hover:bg-pink-600 text-white text-xs md:text-sm font-medium px-5 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95"
+          >
+            <ShoppingBag className="w-4 h-4" /> Order Now
+          </a>
+        ) : (
+          <div className="flex flex-col items-end">
+            <button
+              disabled
+              className="inline-flex items-center gap-1.5 bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-500 text-xs font-medium px-4 py-2 rounded-full cursor-not-allowed select-none"
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              Not Available
+            </button>
+            <span className="text-[10px] text-rose-500 dark:text-rose-400 font-medium mt-1">
+              Currently not available
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
