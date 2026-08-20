@@ -14,3 +14,10 @@ export async function getMenu() {
     // CREATE MENU
     return await menuRepo.getAll()
 }
+
+
+export async function checkMenuAvailability(menuId: string) {
+  await connectDB();
+
+  return await menuRepo.checkMenuAvailability(menuId);
+}

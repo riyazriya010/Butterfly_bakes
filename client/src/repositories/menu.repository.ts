@@ -22,4 +22,21 @@ export class MenuRepository {
         return await Menu.findById(id);
     }
 
+
+    async checkMenuAvailability(menuId: string) {
+    const menu = await Menu.findOne({
+      _id: menuId,
+    }).lean();
+
+    if (!menu) {
+      return null;
+    }
+
+    return {
+      _id: menu._id,
+      name: menu.name,
+      available: menu.available !== false,
+    };
+  }
+
 }
