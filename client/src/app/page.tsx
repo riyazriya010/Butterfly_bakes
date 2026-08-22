@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ShoppingBag, Star, Sparkles, Heart, Mail, QrCode, Home, HeartHandshake, ShieldCheck, Clock } from "lucide-react";
+import { ShoppingBag, Wand2, Star, Sparkles, Heart, Mail, QrCode, Home, HeartHandshake, ShieldCheck, Clock } from "lucide-react";
 import { FaInstagram, FaWhatsapp } from "react-icons/fa6";
 import Link from "next/link";
 import { Footer } from "../components/ui/Footer";
@@ -122,9 +122,9 @@ const bakeryHighlights = [
     bg: "bg-rose-50/80 dark:bg-rose-950/40"
   },
   {
-    icon: <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />,
-    title: "Fast Local Delivery",
-    desc: "Safely delivered directly to your doorstep within a 10 km radius.",
+    icon: <Wand2 className="w-6 h-6 text-purple-600 dark:text-purple-400" />, // import { Wand2 } from 'lucide-react'
+    title: "Customized Designs",
+    desc: "Bring your dream cake to life with tailored flavors, themes, and personalized touches.",
     bg: "bg-purple-50/80 dark:bg-purple-950/40"
   }
 ];
