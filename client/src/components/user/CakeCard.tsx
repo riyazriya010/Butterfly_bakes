@@ -40,15 +40,17 @@ export default function CakeCard({ cake }: Props) {
 
   const isAvailable = cake.available !== false;
 
-  const message = `Hi Butterfly Bakes 👋
+  const message = `Hi Butterfly Bakes,
 
-I would like to order:
+I would like to place an order for:
 
-🍰 Cake : ${cake.name}
-💰 Price : ₹${cake.price}
-⚖️ Weight : ${cake.weight || "1 Kg"}
+Cake: ${cake.name}
 
-Please let me know the available sizes and delivery details.`;
+Price: ₹${cake.price}
+
+Weight: ${cake.weight || "1 Kg"}
+
+Please let me know the available sizes and delivery details.`
 
   const whatsappLink = `https://wa.me/918301036420?text=${encodeURIComponent(
     message
@@ -126,9 +128,8 @@ Please let me know the available sizes and delivery details.`;
   return (
     <>
       <div
-        className={`rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-6 flex flex-col justify-between relative overflow-hidden group ${
-          !isAvailable ? "opacity-75" : ""
-        }`}
+        className={`rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-6 flex flex-col justify-between relative overflow-hidden group ${!isAvailable ? "opacity-75" : ""
+          }`}
       >
         {/* Decorative ambient background blur */}
         <div className="absolute -right-8 -top-8 w-24 h-24 bg-pink-100 dark:bg-pink-950/40 rounded-full blur-2xl group-hover:bg-pink-200 dark:group-hover:bg-pink-900/50 transition-all pointer-events-none" />
