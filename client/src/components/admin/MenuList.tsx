@@ -83,7 +83,7 @@ export default function MenuList() {
 
 
     // To check admin logedIn or not
-   useEffect(() => {
+    useEffect(() => {
 
         const checkAuthentication = async () => {
             try {
@@ -173,17 +173,54 @@ export default function MenuList() {
     }, [fetchMenu]);
 
     // Form Field Validation
+    // const validateForm = () => {
+    //     const newErrors: FormErrors = {};
+    //     if (!formData.name.trim()) newErrors.name = "item name is required";
+    //     if (!formData.flavour.trim()) newErrors.flavour = "flavour is required";
+    //     if (!formData.price || Number(formData.price) <= 0)
+    //         newErrors.price = "valid price is required";
+    //     if (!formData.weight.trim()) newErrors.weight = "weight is required";
+    //     if (!formData.description.trim())
+    //         newErrors.description = "description is required";
+
+    //     setErrors(newErrors);
+    //     return Object.keys(newErrors).length === 0;
+    // };
+
     const validateForm = () => {
         const newErrors: FormErrors = {};
-        if (!formData.name.trim()) newErrors.name = "item name is required";
-        if (!formData.flavour.trim()) newErrors.flavour = "flavour is required";
-        if (!formData.price || Number(formData.price) <= 0)
-            newErrors.price = "valid price is required";
-        if (!formData.weight.trim()) newErrors.weight = "weight is required";
-        if (!formData.description.trim())
-            newErrors.description = "description is required";
+
+        if (!formData.name.trim()) {
+            newErrors.name = "Item name is required";
+        }
+
+        if (!formData.flavour.trim()) {
+            newErrors.flavour = "Flavour is required";
+        }
+
+        if (!formData.price || Number(formData.price) <= 0) {
+            newErrors.price = "Enter a valid price greater than ₹0";
+        }
+
+        // Weight validation
+        const weightValue = Number(formData.weight.replace(" Kg", "").trim());
+
+        if (!formData.weight.trim()) {
+            newErrors.weight = "Weight is required";
+        } else if (!Number.isFinite(weightValue)) {
+            newErrors.weight = "Enter a valid weight";
+        } else if (weightValue < 0.5) {
+            newErrors.weight = "Minimum cake weight is 0.5 Kg";
+        } else if (Math.round(weightValue * 10) / 10 !== weightValue) {
+            newErrors.weight = "Weight must be in 0.1 Kg increments";
+        }
+
+        if (!formData.description.trim()) {
+            newErrors.description = "Description is required";
+        }
 
         setErrors(newErrors);
+
         return Object.keys(newErrors).length === 0;
     };
 
@@ -662,7 +699,7 @@ export default function MenuList() {
                                         Weight (Kg)
                                     </label>
                                     <div className="relative">
-                                        <input
+                                        {/* <input
                                             type="number"
                                             min="0.1"
                                             step="0.1"
@@ -679,7 +716,28 @@ export default function MenuList() {
                                                 ? "border-rose-500 focus:ring-rose-500"
                                                 : "border-stone-200 dark:border-stone-800 focus:ring-pink-500 dark:focus:ring-pink-400"
                                                 }`}
+                                        /> */}
+
+                                        <input
+                                            type="number"
+                                            min="0.5"
+                                            step="0.1"
+                                            value={formData.weight ? formData.weight.replace(" Kg", "") : ""}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+
+                                                setFormData({
+                                                    ...formData,
+                                                    weight: val ? `${val} Kg` : "",
+                                                });
+                                            }}
+                                            placeholder="1"
+                                            className={`w-full pl-4 pr-12 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 transition-all ${errors.weight
+                                                    ? "border-rose-500 focus:ring-rose-500"
+                                                    : "border-stone-200 dark:border-stone-800 focus:ring-pink-500 dark:focus:ring-pink-400"
+                                                }`}
                                         />
+
                                         {/* Disabled Suffix Indicator */}
                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400 dark:text-stone-500 pointer-events-none select-none">
                                             Kg
