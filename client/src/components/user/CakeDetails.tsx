@@ -606,7 +606,7 @@ function CakeDetailsContent() {
       });
 
       setSelectedVariant(latestVariant);
-      setOrderQuantity(1);
+      // setOrderQuantity(1);
       setOrderError("");
       setIsOrderModalOpen(true);
     } catch (error: any) {
