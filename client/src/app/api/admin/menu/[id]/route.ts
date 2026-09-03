@@ -57,8 +57,22 @@ export async function PUT(
       },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating menu:", error);
+
+     if (
+      error?.message ===
+      "DUPLICATE_MENU"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "A menu with the same name and flavour already exists",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -177,9 +191,8 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: true,
-        message: `Menu item ${
-          available ? "enabled" : "disabled"
-        } successfully`,
+        message: `Menu item ${available ? "enabled" : "disabled"
+          } successfully`,
         data: {
           id,
           available,
@@ -187,11 +200,25 @@ export async function PATCH(
       },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error(
       "Error updating menu availability:",
       error
     );
+
+    if (
+      error?.message ===
+      "DUPLICATE_MENU"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "A menu with the same name and flavour already exists",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
       {

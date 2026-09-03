@@ -15,9 +15,48 @@ export async function getMenu() {
     return await menuRepo.getAll()
 }
 
-
-export async function checkMenuAvailability(menuId: string) {
+export async function getMenuWithVariants(
+  page: number,
+  limit: number,
+  search?: string
+) {
   await connectDB();
 
-  return await menuRepo.checkMenuAvailability(menuId);
+  return await menuRepo.getMenuWithVariants(
+    page,
+    limit,
+    search
+  );
+}
+
+
+// export async function checkMenuAvailability(menuId: string) {
+//   await connectDB();
+
+//   return await menuRepo.checkMenuAvailability(menuId);
+// }
+
+
+export async function checkMenuAvailability(
+  cakeId: string,
+  variantId: string
+) {
+  return await menuRepo.checkMenuAvailability(
+    cakeId,
+    variantId
+  );
+}
+
+
+export async function getMenuFilterOptions() {
+  await connectDB();
+
+  return await menuRepo.getMenuFilterOptions();
+}
+
+
+export async function getSingleCakeDetails(id: string) {
+  await connectDB();
+
+  return await menuRepo.singleCakeDetails(id)
 }

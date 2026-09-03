@@ -4,25 +4,46 @@ import { AdminRepository } from "../repositories/admin.repository";
 const adminRepo = new AdminRepository()
 
 export async function getAdmin() {
-    // CONNECT DB
-    await connectDB()
+  // CONNECT DB
+  await connectDB()
 
-    return await adminRepo.getOne()
+  return await adminRepo.getOne()
 }
 
 
-export async function createMenu(menuData: {
-  name: string;
-  flavour: string;
-  price: number;
-  weight: string;
-  description?: string;
-  image?: string;
-  available?: boolean;
-}) {
-  await connectDB();
+// export async function createMenu(menuData: {
+//   name: string;
+//   flavour: string;
+//   price: number;
+//   weight: string;
+//   description?: string;
+//   image?: string;
+//   available?: boolean;
+// }) {
+//   await connectDB();
 
-  return await adminRepo.createMenu(menuData);
+//   return await adminRepo.createMenu(menuData);
+// }
+
+
+export interface CreateMenuData {
+    name: string;
+    flavour: string;
+    weight: number;
+    price: number;
+    description?: string;
+    image?: string;
+    available?: boolean;
+}
+
+export async function createMenu(
+    menuData: CreateMenuData
+) {
+    await connectDB();
+
+    return await adminRepo.createMenu(
+        menuData
+    );
 }
 
 
@@ -68,9 +89,76 @@ export async function updateMenuAvailability(
   available: boolean
 ) {
   await connectDB();
- 
+
   return await adminRepo.updateMenuAvailability(
     id,
     available
   );
+}
+
+
+
+// ------------------------------------ VARIANTS
+
+export async function createVariant(variantData: {
+  cakeId: string;
+  cakeName: string;
+  price: number;
+  weight: number;
+  available?: boolean;
+}) {
+  await connectDB();
+
+  return await adminRepo.createVariant(variantData);
+}
+
+export async function getVariantList({
+  page,
+  limit,
+  search,
+}: {
+  page: number;
+  limit: number;
+  search: string;
+}) {
+  await connectDB();
+
+  return await adminRepo.getVariantLists({
+    page,
+    limit,
+    search,
+  });
+}
+
+
+export async function updateVariant(
+    id: string,
+    updateData: {
+        weight?: number;
+        price?: number;
+        available?: boolean;
+    }
+) {
+    await connectDB();
+
+    return await adminRepo.updateVariant(
+        id,
+        updateData
+    );
+}
+
+
+export async function toggleVariantAvailability(
+    id: string
+) {
+    await connectDB();
+
+    return await adminRepo.toggleVariantAvailability(id);
+}
+
+
+export async function deleteVariant(id: string) {
+    await connectDB();
+
+    return await adminRepo.deleteVariant(id);
 }
