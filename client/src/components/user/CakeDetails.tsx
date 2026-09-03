@@ -1203,6 +1203,7 @@ Please confirm the order details.`;
               onClick={
                 closeOrderModal
               }
+              
               disabled={
                 checkingAvailability
               }
