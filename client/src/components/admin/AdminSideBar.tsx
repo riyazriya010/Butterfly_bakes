@@ -139,29 +139,27 @@ export default function AdminSidebar() {
             {/* ================= SIDEBAR ================= */}
             <aside
                 className={`
-                    fixed
-                    left-0
-                    top-0
-                    z-50
-                    h-screen
-                    w-[250px]
-                    bg-white
-                    dark:bg-stone-900
-                    border-r
-                    border-stone-200
-                    dark:border-stone-800
-                    shadow-xl
-                    flex
-                    flex-col
+    fixed
+    left-0
+    top-0
+    z-50
+    h-[100dvh]
+    w-[250px]
+    bg-white
+    dark:bg-stone-900
+    border-r
+    border-stone-200
+    dark:border-stone-800
+    shadow-xl
+    flex
+    flex-col
+    transition-transform
+    duration-300
+    ease-out
+    lg:translate-x-0
 
-                    transition-transform
-                    duration-300
-                    ease-out
-
-                    lg:translate-x-0
-
-                    ${isOpen ? "translate-x-0" : "-translate-x-full"}
-                `}
+    ${isOpen ? "translate-x-0" : "-translate-x-full"}
+  `}
             >
                 {/* ================= HEADER ================= */}
                 <div
@@ -363,56 +361,59 @@ export default function AdminSidebar() {
                 </nav>
 
                 {/* ================= FOOTER ================= */}
+                {/* ================= FOOTER ================= */}
                 <div
                     className="
-        p-3
-        border-t
-        border-stone-200
-        dark:border-stone-800
-    "
+    px-3
+    pt-3
+    pb-[calc(0.75rem+env(safe-area-inset-bottom))]
+    border-t
+    border-stone-200
+    dark:border-stone-800
+  "
                 >
                     <button
                         type="button"
                         onClick={handleLogout}
                         disabled={logoutLoading}
                         className="
-            group
-            flex
-            items-center
-            gap-3
-            w-full
-            px-3.5
-            py-3
-            rounded-xl
-            border
-            border-rose-100
-            dark:border-rose-900/40
-            bg-rose-50
-            dark:bg-rose-950/30
-            text-sm
-            font-medium
-            text-rose-600
-            dark:text-rose-400
-            hover:bg-rose-100
-            dark:hover:bg-rose-900
-            hover:border-rose-500
-            dark:hover:border-rose-800
-            transition-all
-            duration-200
-            disabled:opacity-50
-            disabled:cursor-not-allowed
-        "
+      group
+      flex
+      items-center
+      gap-3
+      w-full
+      px-3.5
+      py-3
+      rounded-xl
+      border
+      border-rose-100
+      dark:border-rose-900/40
+      bg-rose-50
+      dark:bg-rose-950/30
+      text-sm
+      font-medium
+      text-rose-600
+      dark:text-rose-400
+      hover:bg-rose-100
+      dark:hover:bg-rose-900
+      hover:border-rose-500
+      dark:hover:border-rose-800
+      transition-all
+      duration-200
+      disabled:opacity-50
+      disabled:cursor-not-allowed
+    "
                     >
                         <LogOut
                             className="
-                w-[18px]
-                h-[18px]
-                text-rose-500
-                dark:text-rose-400
-                group-hover:text-rose-400
-                dark:group-hover:text-rose-500
-                transition-colors
-            "
+        w-[18px]
+        h-[18px]
+        text-rose-500
+        dark:text-rose-400
+        group-hover:text-rose-400
+        dark:group-hover:text-rose-500
+        transition-colors
+      "
                         />
 
                         <span>
