@@ -1,4 +1,5 @@
 import Menu from "../models/menu";
+import Offer from "../models/offer";
 import CakeVariant from "../models/variant";
 
 export interface CreateMenuPayload {
@@ -158,9 +159,10 @@ export class MenuRepository {
 
   async checkMenuAvailability(
     cakeId: string,
-    variantId: string
+    variantId: string,
+    isOffer: boolean
   ) {
-    const cake = await Menu.findById(cakeId).lean();
+    const cake = await Menu.findById(cakeId).populate("offerId")
 
     if (!cake) {
       return null;
@@ -171,6 +173,7 @@ export class MenuRepository {
       cakeId: cakeId,
     }).lean();
 
+
     if (!variant) {
       return {
         cakeAvailable: cake.available === true,
@@ -180,10 +183,28 @@ export class MenuRepository {
       };
     }
 
+    const cakeObject = cake.toObject()
+
+    const offer = cakeObject.offerId as any
+
+    const validOffer =
+      offer &&
+        typeof offer === "object" &&
+        (offer.offerStatus === "ACTIVE" ||
+          offer.offerStatus === "UPCOMING") &&
+        offer.isActive === true
+        ? offer
+        : {};
+
+    const { offerId, ...cakeWithoutOfferId } = cakeObject;
+
     return {
       cakeAvailable: cake.available === true,
       variantAvailable: variant.available === true,
-      cake,
+      cake: {
+        ...cakeWithoutOfferId,
+        offer: validOffer,
+      },
       variant,
     };
   }
@@ -240,16 +261,79 @@ export class MenuRepository {
 
   async singleCakeDetails(id: string) {
 
-    const cake = await Menu.findById(id)
+    const cake = await Menu.findById(id).populate("offerId")
 
-    if(!cake) return null
+    if (!cake) return null
 
-    const variant = await CakeVariant.find({cakeId: id})
+    const variant = await CakeVariant.find({ cakeId: id })
+
+
+    const cakeObject = cake.toObject()
+
+    const offer = cakeObject.offerId as any
+
+    const validOffer =
+      offer &&
+        typeof offer === "object" &&
+        (offer.offerStatus === "ACTIVE" ||
+          offer.offerStatus === "UPCOMING") &&
+        offer.isActive === true
+        ? offer
+        : {};
+
+    const { offerId, ...cakeWithoutOfferId } = cakeObject;
 
     return {
-      cake,
+      cake: {
+        ...cakeWithoutOfferId,
+        offer: validOffer,
+      },
       variant
     }
+  }
+
+
+
+
+
+
+  // --------------------------------- OFFER
+
+
+
+  // CHECK AND UPDATE ALL OFFERS STATUS
+  async checkAndUpdateeOffer() {
+    const now = new Date();
+
+    const [expiredResult, activatedResult] = await Promise.all([
+      // 1. Mark offers as EXPIRED if their end date has passed
+      Offer.updateMany(
+        {
+          endDate: { $lt: now },
+          offerStatus: { $ne: "EXPIRED" },
+        },
+        {
+          $set: { offerStatus: "EXPIRED" },
+        }
+      ),
+
+      // 2. Mark UPCOMING offers as ACTIVE if their start date has reached/passed
+      Offer.updateMany(
+        {
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+          offerStatus: "UPCOMING",
+        },
+        {
+          $set: { offerStatus: "ACTIVE" },
+        }
+      ),
+    ]);
+
+    return {
+      expiredCount: expiredResult.modifiedCount,
+      activatedCount: activatedResult.modifiedCount,
+    };
   }
 
 }

@@ -1,5 +1,6 @@
 "use client";
 import { Heart, Mail, QrCode, MapPin } from "lucide-react";
+import Link from "next/link";
 import { FaInstagram, FaWhatsapp } from "react-icons/fa6";
 
 export const Footer = () => {
@@ -74,7 +75,13 @@ export const Footer = () => {
             </div>
 
             <div className="bg-stone-700/50 p-2.5 rounded-xl text-pink-400 shrink-0 border border-stone-600/50">
-              <MapPin className="w-6 h-6" />
+              <Link
+                href="https://share.google/1o49rX6UTXzaGuTL7"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MapPin className="w-6 h-6" />
+              </Link>
             </div>
           </div>
 

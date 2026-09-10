@@ -12,8 +12,13 @@ import {
     Sparkles,
     AlertTriangle,
     LogOut,
+    Layers3,
 } from "lucide-react";
 import axios from "axios";
+
+import Toast, {
+    ToastType,
+} from "../ui/Toast"
 
 interface MenuItem {
     _id: string;
@@ -105,6 +110,32 @@ export default function VariantList() {
     });
 
     const [errors, setErrors] = useState<FormErrors>({});
+
+
+
+    // ========================================================
+    // TOAST ALERT
+    // ========================================================
+
+    const [toast, setToast] = useState({
+        isOpen: false,
+        message: "",
+        type: "success" as ToastType,
+    });
+
+    const showToast = (
+        message: string,
+        type: ToastType = "success"
+    ) => {
+        console.log('showToast', { message, type })
+        setToast({
+            isOpen: true,
+            message,
+            type,
+        });
+    };
+
+
 
     // --------------------------------------------------
     // SEARCH DEBOUNCE
@@ -405,6 +436,14 @@ export default function VariantList() {
             setEditingItem(null);
 
             await fetchVariants();
+
+            showToast(
+                editingItem
+                    ? "Vairant updated"
+                    : "Variant added",
+                "success"
+            );
+
         } catch (err: any) {
             console.info(
                 "Failed to save variant:",
@@ -439,6 +478,13 @@ export default function VariantList() {
             );
 
             await fetchVariants();
+
+            showToast(
+                item.available
+                    ? "Variant disabled"
+                    : "Variant enabled",
+                "success"
+            );
         } catch (err: any) {
             const errorMsg =
                 err.response?.data?.error ||
@@ -468,6 +514,8 @@ export default function VariantList() {
             setItemToDelete(null);
 
             await fetchVariants();
+
+            showToast("Variant deleted", "success");
         } catch (err: any) {
             const errorMsg =
                 err.response?.data?.error ||
@@ -488,32 +536,6 @@ export default function VariantList() {
     };
 
     // --------------------------------------------------
-    // LOGOUT
-    // --------------------------------------------------
-
-    const handleLogout = async () => {
-        if (logoutLoading) return;
-
-        setLogoutLoading(true);
-
-        try {
-            await axios.post("/api/admin", {
-                state: "logout",
-            });
-
-            window.location.href =
-                "/admin-panel/login";
-        } catch (err) {
-            console.info(
-                "Logout failed:",
-                err
-            );
-        } finally {
-            setLogoutLoading(false);
-        }
-    };
-
-    // --------------------------------------------------
     // UI
     // --------------------------------------------------
 
@@ -522,6 +544,21 @@ export default function VariantList() {
 
         <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 pt-20 px-4 pb-4 md:pt-20 md:px-8 md:pb-8 lg:pt-8 transition-colors duration-300">
 
+            {/* TOAST */}
+
+            <Toast
+                isOpen={toast.isOpen}
+                message={toast.message}
+                type={toast.type}
+                onClose={() =>
+                    setToast((prev) => ({
+                        ...prev,
+                        isOpen: false,
+                    }))
+                }
+            />
+
+
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* HEADER */}
@@ -529,9 +566,20 @@ export default function VariantList() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 border-b border-stone-200 dark:border-stone-800 pb-6">
 
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 dark:text-stone-50">
-                            Cake Variants
-                        </h1>
+                        <div className="flex items-center gap-2">
+                            <Layers3
+                                className="
+                    w-6
+                    h-6
+                    text-rose-500
+                    shrink-0
+                "
+                            />
+
+                            <h1 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 dark:text-stone-50">
+                                Cake Variants
+                            </h1>
+                        </div>
 
                         <p className="text-xs md:text-sm text-stone-500 dark:text-stone-400 mt-1">
                             Manage cake weights, prices, and availability.
@@ -734,45 +782,45 @@ export default function VariantList() {
 
                         <div className="overflow-x-auto">
 
-                            <table className="w-full text-left border-collapse">
+                            {/* <table className="w-full text-left border-collapse"> */}
+
+                            <table className="min-w-[700px] w-full text-left border-collapse">
 
                                 <thead>
-
                                     <tr className="
-                                        border-b
-                                        border-stone-200/80
-                                        dark:border-stone-800
-                                        bg-stone-50/50
-                                        dark:bg-stone-950/50
-                                        text-[11px]
-                                        uppercase
-                                        tracking-wider
-                                        text-stone-500
-                                        dark:text-stone-400
-                                    ">
+                border-b
+                border-stone-200/80
+                dark:border-stone-800
+                bg-stone-50/50
+                dark:bg-stone-950/50
+                text-[11px]
+                uppercase
+                tracking-wider
+                text-stone-500
+                dark:text-stone-400
+            ">
 
-                                        <th className="p-4">
+                                        <th className="p-4 w-[30%] whitespace-nowrap">
                                             Cake
                                         </th>
 
-                                        <th className="p-4">
+                                        <th className="p-4 w-[15%] whitespace-nowrap">
                                             Weight
                                         </th>
 
-                                        <th className="p-4">
+                                        <th className="p-4 w-[15%] whitespace-nowrap">
                                             Price
                                         </th>
 
-                                        <th className="p-4">
+                                        <th className="p-4 w-[20%] whitespace-nowrap">
                                             Status
                                         </th>
 
-                                        <th className="p-4 text-right">
+                                        <th className="p-4 w-[20%] text-right whitespace-nowrap">
                                             Actions
                                         </th>
 
                                     </tr>
-
                                 </thead>
 
                                 <tbody className="
@@ -794,52 +842,53 @@ export default function VariantList() {
                                         >
 
                                             {/* CAKE */}
-
                                             <td className="p-4">
-
                                                 <p className="
-                                                    font-semibold
-                                                    text-stone-900
-                                                    dark:text-stone-100
-                                                ">
+        font-semibold
+        text-stone-900
+        dark:text-stone-100
+        whitespace-nowrap
+    ">
                                                     {item.cakeName}
                                                 </p>
 
                                                 <p className="
-                                                    text-[11px]
-                                                    text-stone-500
-                                                    dark:text-stone-400
-                                                ">
+        text-[11px]
+        text-stone-500
+        dark:text-stone-400
+        whitespace-nowrap
+    ">
                                                     Cake variant
                                                 </p>
-
                                             </td>
 
-                                            {/* WEIGHT */}
 
+                                            {/* WEIGHT */}
                                             <td className="
-                                                p-4
-                                                font-medium
-                                                text-stone-700
-                                                dark:text-stone-300
-                                            ">
+    p-4
+    font-medium
+    text-stone-700
+    dark:text-stone-300
+    whitespace-nowrap
+">
                                                 {item.weight} Kg
                                             </td>
 
-                                            {/* PRICE */}
 
+                                            {/* PRICE */}
                                             <td className="
-                                                p-4
-                                                font-semibold
-                                                text-stone-900
-                                                dark:text-stone-50
-                                            ">
+    p-4
+    font-semibold
+    text-stone-900
+    dark:text-stone-50
+    whitespace-nowrap
+">
                                                 ₹{item.price}
                                             </td>
 
                                             {/* STATUS */}
 
-                                            <td className="p-4">
+                                            <td className="p-4 whitespace-nowrap">
 
                                                 <button
                                                     type="button"
@@ -901,7 +950,7 @@ export default function VariantList() {
 
                                             {/* ACTIONS */}
 
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-right whitespace-nowrap">
 
                                                 <div className="
                                                     flex
@@ -980,7 +1029,7 @@ export default function VariantList() {
                     )}
 
                     {/* PAGINATION */}
-
+                    {/* 
                     {totalPages > 1 && (
 
                         <div className="
@@ -1077,9 +1126,141 @@ export default function VariantList() {
                             </div>
 
                         </div>
-                    )}
+                    )} */}
+
+                    {/* ==================================================
+                                            PAGINATION
+                                        ================================================== */}
+
+                    {!loading &&
+                        items.length >
+                        0 && (
+                            <div
+                                className="
+                                                        flex
+                                                        items-center
+                                                        justify-between
+                                                        px-5
+                                                        md:px-6
+                                                        py-4
+                                                        border-t
+                                                        border-stone-200/80
+                                                        dark:border-stone-800
+                                                        bg-stone-50/30
+                                                        dark:bg-stone-950/30
+                                                    "
+                            >
+                                <span
+                                    className="
+                                                            text-xs
+                                                            text-stone-500
+                                                            dark:text-stone-400
+                                                        "
+                                >
+                                    Page{" "}
+                                    <span
+                                        className="
+                                                                font-semibold
+                                                                text-stone-800
+                                                                dark:text-stone-200
+                                                            "
+                                    >
+                                        {
+                                            currentPage
+                                        }
+                                    </span>{" "}
+                                    of{" "}
+                                    <span
+                                        className="
+                                                                font-semibold
+                                                                text-stone-800
+                                                                dark:text-stone-200
+                                                            "
+                                    >
+                                        {
+                                            totalPages
+                                        }
+                                    </span>
+                                </span>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            currentPage <=
+                                            1
+                                        }
+                                        onClick={() =>
+                                            setCurrentPage(
+                                                (
+                                                    p
+                                                ) =>
+                                                    Math.max(
+                                                        1,
+                                                        p -
+                                                        1
+                                                    )
+                                            )
+                                        }
+                                        className="
+                                                                p-2
+                                                                rounded-xl
+                                                                border
+                                                                border-stone-200
+                                                                dark:border-stone-800
+                                                                disabled:opacity-40
+                                                                disabled:cursor-not-allowed
+                                                                hover:bg-stone-100
+                                                                dark:hover:bg-stone-800
+                                                                text-stone-600
+                                                                dark:text-stone-300
+                                                                transition-colors
+                                                            "
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            currentPage >=
+                                            totalPages
+                                        }
+                                        onClick={() =>
+                                            setCurrentPage(
+                                                (
+                                                    p
+                                                ) =>
+                                                    Math.min(
+                                                        totalPages,
+                                                        p +
+                                                        1
+                                                    )
+                                            )
+                                        }
+                                        className="
+                                                                p-2
+                                                                rounded-xl
+                                                                border
+                                                                border-stone-200
+                                                                dark:border-stone-800
+                                                                disabled:opacity-40
+                                                                disabled:cursor-not-allowed
+                                                                hover:bg-stone-100
+                                                                dark:hover:bg-stone-800
+                                                                text-stone-600
+                                                                dark:text-stone-300
+                                                                transition-colors
+                                                            "
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                 </div>
+
             </div>
 
             {/* =====================================================

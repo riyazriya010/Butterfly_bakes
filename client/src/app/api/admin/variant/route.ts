@@ -167,6 +167,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
+
+        if (error.message === "PRICE_MUST_GREATER_THAN_SMALLER_WEIGHT") {
+            return NextResponse.json(
+                { success: false, error: "Price must be greater than the smaller weight variant", },
+                { status: 400 });
+        }
+
+        if (error.message === "PRICE_MUST_LESS_THAN_LARGER_WEIGHT") {
+            return NextResponse.json(
+                { success: false, error: "Price must be less than the larger weight variant", },
+                { status: 400 });
+        }
+
         console.error(
             "Error creating cake variant:",
             error
@@ -184,40 +197,40 @@ export async function POST(request: NextRequest) {
 
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
+    try {
+        const { searchParams } = new URL(request.url);
 
-    const page = Math.max(
-      parseInt(searchParams.get("page") || "1", 10),
-      1
-    );
+        const page = Math.max(
+            parseInt(searchParams.get("page") || "1", 10),
+            1
+        );
 
-    const limit = Math.max(
-      parseInt(searchParams.get("limit") || "8", 10),
-      1
-    );
+        const limit = Math.max(
+            parseInt(searchParams.get("limit") || "8", 10),
+            1
+        );
 
-    const search = searchParams.get("search")?.trim() || "";
+        const search = searchParams.get("search")?.trim() || "";
 
-    const result = await getVariantList({
-      page,
-      limit,
-      search,
-    });
+        const result = await getVariantList({
+            page,
+            limit,
+            search,
+        });
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    console.error("Failed to fetch variants:", error);
+        return NextResponse.json({
+            success: true,
+            ...result,
+        });
+    } catch (error) {
+        console.error("Failed to fetch variants:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch variant items",
-      },
-      { status: 500 }
-    );
-  }
+        return NextResponse.json(
+            {
+                success: false,
+                error: "Failed to fetch variant items",
+            },
+            { status: 500 }
+        );
+    }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createMenu, getMenuList } from "@/src/services/admin.service";
+import { checkAndUpdateeOfferService, createMenu, getMenuList } from "@/src/services/admin.service";
 
 interface CreateMenuData {
     name: string;
@@ -8,12 +8,13 @@ interface CreateMenuData {
     price: number;
     description?: string;
     available?: boolean;
+    offerId?: string | null;
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-
+        
         const {
             name,
             flavour,
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
             description,
             image,
             available,
+            offerId
         } = body;
 
         // --------------------------------------------------
@@ -221,6 +223,8 @@ export async function POST(request: NextRequest) {
 
             available:
                 available ?? true,
+
+            offerId,
         };
 
         // --------------------------------------------------
@@ -307,40 +311,42 @@ export async function POST(request: NextRequest) {
 
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
+    try {
+        const { searchParams } = new URL(request.url);
 
-    const page = Math.max(
-      parseInt(searchParams.get("page") || "1", 10),
-      1
-    );
+        const page = Math.max(
+            parseInt(searchParams.get("page") || "1", 10),
+            1
+        );
 
-    const limit = Math.max(
-      parseInt(searchParams.get("limit") || "8", 10),
-      1
-    );
+        const limit = Math.max(
+            parseInt(searchParams.get("limit") || "8", 10),
+            1
+        );
 
-    const search = searchParams.get("search")?.trim() || "";
+        const search = searchParams.get("search")?.trim() || "";
 
-    const result = await getMenuList({
-      page,
-      limit,
-      search,
-    });
+        const result = await getMenuList({
+            page,
+            limit,
+            search,
+        });
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    console.error("Failed to fetch menu:", error);
+        await checkAndUpdateeOfferService()
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch menu items",
-      },
-      { status: 500 }
-    );
-  }
+        return NextResponse.json({
+            success: true,
+            ...result,
+        });
+    } catch (error) {
+        console.error("Failed to fetch menu:", error);
+
+        return NextResponse.json(
+            {
+                success: false,
+                error: "Failed to fetch menu items",
+            },
+            { status: 500 }
+        );
+    }
 }

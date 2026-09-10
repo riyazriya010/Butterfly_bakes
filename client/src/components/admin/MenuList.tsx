@@ -16,22 +16,67 @@ import {
     ChevronRight,
     Sparkles,
     AlertTriangle,
+    Tag,
+    CakeSlice,
+    CheckCircle,
+    XCircle,
+    CalendarDays,
+    Clock3,
+    PauseCircle,
+    Percent,
+    IndianRupee,
 } from "lucide-react";
 
 import axios from "axios";
 
+import Toast, {
+    ToastType,
+} from "../ui/Toast"
+
+// ============================================================
+// TYPES
+// ============================================================
+
+export type OfferStatus =
+    | "ACTIVE"
+    | "EXPIRED"
+    | "UPCOMING"
+    | "INACTIVE";
+
+export interface OfferItem {
+    _id: string;
+    title: string;
+
+    discountType:
+    | "PERCENTAGE"
+    | "FLAT";
+
+    discountValue: number;
+
+    startDate: string;
+    endDate: string;
+
+    offerStatus: OfferStatus;
+
+    isActive: boolean;
+}
+
 export interface MenuItem {
     _id: string;
+
     name: string;
     flavour: string;
     description: string;
-    image: string;
+
+    image?: string;
+
     available: boolean;
 
-    // These can come from your GET API if you populate/attach
-    // the first/default variant.
     weight?: number;
     price?: number;
+
+    offerId?: string | null;
+    offer?: OfferItem | null;
 }
 
 interface FormErrors {
@@ -40,6 +85,7 @@ interface FormErrors {
     weight?: string;
     price?: string;
     description?: string;
+    offerId?: string;
 }
 
 interface FormData {
@@ -49,6 +95,7 @@ interface FormData {
     price: string;
     description: string;
     available: boolean;
+    offerId: string | null;
 }
 
 const INITIAL_FORM_DATA: FormData = {
@@ -58,29 +105,214 @@ const INITIAL_FORM_DATA: FormData = {
     price: "",
     description: "",
     available: true,
+    offerId: null,
 };
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+function formatOfferValue(offer: OfferItem) {
+    if (offer.discountType === "PERCENTAGE") {
+        return `${offer.discountValue}% OFF`;
+    }
+
+    return `₹${offer.discountValue} OFF`;
+}
+
+/**
+ * Backend should normally provide offerStatus.
+ *
+ * This fallback is useful if an older API response does not
+ * contain offerStatus.
+ */
+function getOfferStatus(offer: OfferItem): OfferStatus {
+    if (!offer.isActive) return "INACTIVE"
+    if (
+        offer.offerStatus === "ACTIVE" ||
+        offer.offerStatus === "UPCOMING" ||
+        offer.offerStatus === "EXPIRED"
+    ) {
+        return offer.offerStatus;
+    }
+
+    const now = Date.now();
+
+    const start = new Date(
+        offer.startDate
+    ).getTime();
+
+    const end = new Date(
+        offer.endDate
+    ).getTime();
+
+    if (
+        Number.isNaN(start) ||
+        Number.isNaN(end)
+    ) {
+        return "EXPIRED";
+    }
+
+    if (now < start) {
+        return "UPCOMING";
+    }
+
+    if (now >= start && now <= end) {
+        return "ACTIVE";
+    }
+
+    return "EXPIRED";
+}
+
+function getOfferStatusConfig(
+    status: OfferStatus
+) {
+    switch (status) {
+        case "ACTIVE":
+            return {
+                label: "ACTIVE",
+                icon: CheckCircle,
+                badgeClass:
+                    "bg-emerald-50 text-emerald-700 border-emerald-200 " +
+                    "dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800",
+                iconClass:
+                    "text-emerald-600 dark:text-emerald-400",
+                titleClass:
+                    "text-pink-600 dark:text-pink-400",
+            };
+
+        case "UPCOMING":
+            return {
+                label: "UPCOMING",
+                icon: Clock3,
+                badgeClass:
+                    "bg-amber-50 text-amber-700 border-amber-200 " +
+                    "dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+                iconClass:
+                    "text-amber-600 dark:text-amber-400",
+                titleClass:
+                    "text-amber-700 dark:text-amber-400",
+            };
+
+        case "INACTIVE":
+            return {
+                label: "INACTIVE",
+                icon: PauseCircle, // or AlertCircle / Ban
+                badgeClass:
+                    "bg-rose-50 text-rose-700 border-rose-200 " +
+                    "dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800",
+                iconClass:
+                    "text-rose-600 dark:text-rose-400",
+                titleClass:
+                    "text-rose-700 dark:text-rose-400",
+            };
+
+        case "EXPIRED":
+        default:
+            return {
+                label: "EXPIRED",
+                icon: XCircle,
+                badgeClass:
+                    "bg-stone-100 text-stone-600 border-stone-200 " +
+                    "dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700",
+                iconClass:
+                    "text-stone-500 dark:text-stone-400",
+                titleClass:
+                    "text-stone-500 dark:text-stone-400",
+            };
+    }
+}
+
+function formatOfferDate(date: string) {
+    const parsedDate = new Date(date);
+
+    if (
+        Number.isNaN(
+            parsedDate.getTime()
+        )
+    ) {
+        return "Invalid date";
+    }
+
+    return parsedDate.toLocaleString(
+        "en-IN",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }
+    );
+}
+
+function formatShortOfferDate(date: string) {
+    const parsedDate = new Date(date);
+
+    if (
+        Number.isNaN(
+            parsedDate.getTime()
+        )
+    ) {
+        return "Invalid date";
+    }
+
+    return parsedDate.toLocaleDateString(
+        "en-IN",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }
+    );
+}
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
 export default function MenuList() {
-    // --------------------------------------------------
-    // DATA
-    // --------------------------------------------------
+    // ========================================================
+    // MENU DATA
+    // ========================================================
 
-    const [items, setItems] = useState<MenuItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [items, setItems] =
+        useState<MenuItem[]>([]);
 
-    const [search, setSearch] = useState("");
+    const [loading, setLoading] =
+        useState(true);
+
+    // IMPORTANT:
+    // Store ALL offers.
+    //
+    // Previously this was activeOffers and UPCOMING / EXPIRED
+    // offers were removed before reaching the UI.
+    const [offers, setOffers] =
+        useState<OfferItem[]>([]);
+
+    const [offersLoading, setOffersLoading] =
+        useState(false);
+
+    const [search, setSearch] =
+        useState("");
+
     const [debouncedSearch, setDebouncedSearch] =
         useState("");
 
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalItems, setTotalItems] = useState(0);
+    const [currentPage, setCurrentPage] =
+        useState(1);
+
+    const [totalPages, setTotalPages] =
+        useState(1);
+
+    const [totalItems, setTotalItems] =
+        useState(0);
 
     const limit = 5;
 
-    // --------------------------------------------------
+    // ========================================================
     // FORM
-    // --------------------------------------------------
+    // ========================================================
 
     const [isFormModalOpen, setIsFormModalOpen] =
         useState(false);
@@ -89,14 +321,16 @@ export default function MenuList() {
         useState<MenuItem | null>(null);
 
     const [formData, setFormData] =
-        useState<FormData>(INITIAL_FORM_DATA);
+        useState<FormData>(
+            INITIAL_FORM_DATA
+        );
 
     const [errors, setErrors] =
         useState<FormErrors>({});
 
-    // --------------------------------------------------
+    // ========================================================
     // DELETE
-    // --------------------------------------------------
+    // ========================================================
 
     const [isDeleteModalOpen, setIsDeleteModalOpen] =
         useState(false);
@@ -104,9 +338,9 @@ export default function MenuList() {
     const [itemToDelete, setItemToDelete] =
         useState<MenuItem | null>(null);
 
-    // --------------------------------------------------
+    // ========================================================
     // ACTION
-    // --------------------------------------------------
+    // ========================================================
 
     const [actionLoading, setActionLoading] =
         useState(false);
@@ -117,62 +351,95 @@ export default function MenuList() {
     const [isErrorModalOpen, setIsErrorModalOpen] =
         useState(false);
 
-    // --------------------------------------------------
+
+
+    // ========================================================
+    // TOAST ALERT
+    // ========================================================
+
+    const [toast, setToast] = useState({
+        isOpen: false,
+        message: "",
+        type: "success" as ToastType,
+    });
+
+    const showToast = (
+        message: string,
+        type: ToastType = "success"
+    ) => {
+        console.log('showToast', { message, type })
+        setToast({
+            isOpen: true,
+            message,
+            type,
+        });
+    };
+
+    // ========================================================
     // SEARCH DEBOUNCE
-    // --------------------------------------------------
+    // ========================================================
 
     useEffect(() => {
         const timer = setTimeout(() => {
-            setDebouncedSearch(search.trim());
+            setDebouncedSearch(
+                search.trim()
+            );
+
             setCurrentPage(1);
         }, 400);
 
-        return () => clearTimeout(timer);
+        return () =>
+            clearTimeout(timer);
     }, [search]);
 
-    // --------------------------------------------------
+    // ========================================================
     // AUTHENTICATION
-    // --------------------------------------------------
+    // ========================================================
 
     useEffect(() => {
-        const checkAuthentication = async () => {
-            try {
-                const response = await fetch(
-                    "/api/admin",
-                    {
-                        method: "GET",
-                        credentials: "include",
-                        cache: "no-store",
+        const checkAuthentication =
+            async () => {
+                try {
+                    const response =
+                        await fetch(
+                            "/api/admin",
+                            {
+                                method: "GET",
+                                credentials:
+                                    "include",
+                                cache: "no-store",
+                            }
+                        );
+
+                    const data =
+                        await response.json();
+
+                    if (
+                        !response.ok ||
+                        !data.authenticated
+                    ) {
+                        window.location.replace(
+                            "/admin-panel/login"
+                        );
                     }
-                );
+                } catch (error) {
+                    console.info(
+                        "Authentication check failed:",
+                        error
+                    );
 
-                const data = await response.json();
-
-                if (
-                    !response.ok ||
-                    !data.authenticated
-                ) {
                     window.location.replace(
                         "/admin-panel/login"
                     );
                 }
-            } catch (error) {
-                console.info(
-                    "Authentication check failed:",
-                    error
-                );
-
-                window.location.replace(
-                    "/admin-panel/login"
-                );
-            }
-        };
+            };
 
         checkAuthentication();
 
-        const handlePageShow = () => {
-            checkAuthentication();
-        };
+        const handlePageShow =
+            () => {
+                checkAuthentication();
+            };
 
         window.addEventListener(
             "pageshow",
@@ -187,58 +454,186 @@ export default function MenuList() {
         };
     }, []);
 
-    // --------------------------------------------------
+    // ========================================================
     // FETCH MENU
-    // --------------------------------------------------
+    // ========================================================
 
-    const fetchMenu = useCallback(async () => {
-        setLoading(true);
+    const fetchMenu = useCallback(
+        async () => {
+            setLoading(true);
 
-        try {
-            const response = await axios.get(
-                "/api/admin/menu",
-                {
-                    params: {
-                        page: currentPage,
-                        limit,
-                        search: debouncedSearch,
-                    },
+            try {
+                const response =
+                    await axios.get(
+                        "/api/admin/menu",
+                        {
+                            params: {
+                                page: currentPage,
+                                limit,
+                                search: debouncedSearch,
+                            },
+                        }
+                    );
+
+                if (
+                    response.data?.success
+                ) {
+                    setItems(
+                        response.data.data ||
+                        []
+                    );
+
+                    setTotalPages(
+                        response.data
+                            .pagination
+                            ?.totalPages || 1
+                    );
+
+                    setTotalItems(
+                        response.data
+                            .pagination
+                            ?.totalItems || 0
+                    );
                 }
-            );
-
-            if (response.data.success) {
-                setItems(response.data.data);
-
-                setTotalPages(
-                    response.data.pagination
-                        ?.totalPages || 1
+            } catch (error) {
+                console.info(
+                    "Failed to fetch menu:",
+                    error
                 );
-
-                setTotalItems(
-                    response.data.pagination
-                        ?.totalItems || 0
-                );
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.info(
-                "Failed to fetch menu:",
-                error
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, [currentPage, debouncedSearch]);
+        },
+        [
+            currentPage,
+            debouncedSearch,
+        ]
+    );
 
     useEffect(() => {
         fetchMenu();
     }, [fetchMenu]);
 
-    // --------------------------------------------------
+    // ========================================================
+    // FETCH ALL OFFERS
+    // ========================================================
+
+    const fetchOffers = useCallback(
+        async () => {
+            setOffersLoading(true);
+
+            try {
+                const response =
+                    await axios.get(
+                        "/api/admin/offer",
+                        {
+                            params: {
+                                page: 1,
+                                limit: 100,
+                                search: "",
+                            },
+                        }
+                    );
+
+                if (
+                    response.data?.success
+                ) {
+                    const filteredOffers =
+                        response.data.data
+                        || [];
+
+
+
+                    /**
+                     * IMPORTANT:
+                     *
+                     * Do NOT filter here.
+                     *
+                     * We need:
+                     * ACTIVE
+                     * UPCOMING
+                     * EXPIRED
+                     *
+                     * in the UI.
+                     */
+                    setOffers(
+                        filteredOffers
+                    );
+                } else {
+                    setOffers([]);
+                }
+            } catch (error: any) {
+                console.error(
+                    "Failed to fetch offers:",
+                    error?.response
+                        ?.data ||
+                    error?.message
+                );
+
+                setOffers([]);
+            } finally {
+                setOffersLoading(false);
+            }
+        },
+        []
+    );
+
+    useEffect(() => {
+        fetchOffers();
+    }, [fetchOffers]);
+
+    useEffect(() => {
+        if (isFormModalOpen) {
+            fetchOffers();
+        }
+    }, [
+        isFormModalOpen,
+        fetchOffers,
+    ]);
+
+    // ========================================================
+    // OFFER COUNTS
+    // ========================================================
+
+    const activeOfferCount =
+        offers.filter(
+            (offer) =>
+                getOfferStatus(
+                    offer
+                ) === "ACTIVE"
+        ).length;
+
+    const upcomingOfferCount =
+        offers.filter(
+            (offer) =>
+                getOfferStatus(
+                    offer
+                ) === "UPCOMING"
+        ).length;
+
+    const expiredOfferCount =
+        offers.filter(
+            (offer) =>
+                getOfferStatus(
+                    offer
+                ) === "EXPIRED"
+        ).length;
+
+    const inactiveOfferCount =
+        offers.filter(
+            (offer) =>
+                getOfferStatus(
+                    offer
+                ) === "INACTIVE"
+        ).length;
+
+    // ========================================================
     // FORM VALIDATION
-    // --------------------------------------------------
+    // ========================================================
 
     const validateForm = () => {
-        const newErrors: FormErrors = {};
+        const newErrors: FormErrors =
+            {};
 
         // NAME
         if (!formData.name.trim()) {
@@ -252,24 +647,35 @@ export default function MenuList() {
                 "Flavour is required";
         }
 
-        // WEIGHT
+        // CREATE ONLY
         if (!editingItem) {
+            // WEIGHT
             if (!formData.weight.trim()) {
                 newErrors.weight =
                     "Weight is required";
             } else {
-                const weight = Number(
-                    formData.weight
-                );
+                const weight =
+                    Number(
+                        formData.weight
+                    );
 
-                if (!Number.isFinite(weight)) {
+                if (
+                    !Number.isFinite(
+                        weight
+                    )
+                ) {
                     newErrors.weight =
                         "Weight must be a valid number";
-                } else if (weight < 0.5) {
+                } else if (
+                    weight < 0.5
+                ) {
                     newErrors.weight =
                         "Minimum cake weight is 0.5 Kg";
                 } else if (
-                    Math.round(weight * 10) / 10 !==
+                    Math.round(
+                        weight * 10
+                    ) /
+                    10 !==
                     weight
                 ) {
                     newErrors.weight =
@@ -282,14 +688,21 @@ export default function MenuList() {
                 newErrors.price =
                     "Price is required";
             } else {
-                const price = Number(
-                    formData.price
-                );
+                const price =
+                    Number(
+                        formData.price
+                    );
 
-                if (!Number.isFinite(price)) {
+                if (
+                    !Number.isFinite(
+                        price
+                    )
+                ) {
                     newErrors.price =
                         "Price must be a valid number";
-                } else if (price <= 0) {
+                } else if (
+                    price <= 0
+                ) {
                     newErrors.price =
                         "Price must be greater than ₹0";
                 }
@@ -297,21 +710,27 @@ export default function MenuList() {
         }
 
         // DESCRIPTION
-        if (!formData.description.trim()) {
+        if (
+            !formData.description.trim()
+        ) {
             newErrors.description =
                 "Description is required";
         }
 
-        setErrors(newErrors);
+        setErrors(
+            newErrors
+        );
 
         return (
-            Object.keys(newErrors).length === 0
+            Object.keys(
+                newErrors
+            ).length === 0
         );
     };
 
-    // --------------------------------------------------
+    // ========================================================
     // OPEN CREATE / EDIT
-    // --------------------------------------------------
+    // ========================================================
 
     const handleOpenFormModal = (
         item?: MenuItem
@@ -321,26 +740,43 @@ export default function MenuList() {
         setIsErrorModalOpen(false);
 
         if (item) {
-            // EDIT MENU
             setEditingItem(item);
 
             setFormData({
                 name: item.name,
                 flavour: item.flavour,
+
                 weight:
-                    item.weight !== undefined
-                        ? String(item.weight)
+                    item.weight !==
+                        undefined
+                        ? String(
+                            item.weight
+                        )
                         : "",
+
                 price:
-                    item.price !== undefined
-                        ? String(item.price)
+                    item.price !==
+                        undefined
+                        ? String(
+                            item.price
+                        )
                         : "",
+
                 description:
-                    item.description || "",
-                available: item.available,
+                    item.description ||
+                    "",
+
+                available:
+                    item.available,
+
+                offerId:
+                    item.offerId
+                        ? String(
+                            item.offerId
+                        )
+                        : null,
             });
         } else {
-            // CREATE MENU + FIRST VARIANT
             setEditingItem(null);
 
             setFormData({
@@ -351,9 +787,9 @@ export default function MenuList() {
         setIsFormModalOpen(true);
     };
 
-    // --------------------------------------------------
+    // ========================================================
     // CLOSE FORM
-    // --------------------------------------------------
+    // ========================================================
 
     const handleCloseFormModal = () => {
         setIsFormModalOpen(false);
@@ -367,165 +803,362 @@ export default function MenuList() {
         setServerError("");
     };
 
-    // --------------------------------------------------
+    // ========================================================
     // CREATE / UPDATE
-    // --------------------------------------------------
+    // ========================================================
 
-    const handleFormSubmit = async (
-        e: React.FormEvent
-    ) => {
-        e.preventDefault();
+    const handleFormSubmit =
+        async (
+            e: React.FormEvent
+        ) => {
+            e.preventDefault();
 
-        if (!validateForm()) {
-            return;
-        }
-
-        setActionLoading(true);
-        setServerError("");
-        setIsErrorModalOpen(false);
-
-        try {
-            if (editingItem) {
-                // Menu update.
-                // Weight and price belong to Variant,
-                // not Menu.
-                const payload = {
-                    name: formData.name.trim(),
-                    flavour:
-                        formData.flavour.trim(),
-                    description:
-                        formData.description.trim(),
-                    available:
-                        formData.available,
-                };
-
-                await axios.put(
-                    `/api/admin/menu/${editingItem._id}`,
-                    payload
-                );
-            } else {
-                // CREATE MENU + FIRST VARIANT
-                const payload = {
-                    name: formData.name.trim(),
-                    flavour:
-                        formData.flavour.trim(),
-
-                    weight: Number(
-                        formData.weight
-                    ),
-
-                    price: Number(
-                        formData.price
-                    ),
-
-                    description:
-                        formData.description.trim(),
-
-                    available:
-                        formData.available,
-                };
-
-                await axios.post(
-                    "/api/admin/menu",
-                    payload
-                );
+            if (!validateForm()) {
+                return;
             }
 
-            handleCloseFormModal();
+            setActionLoading(true);
+            setServerError("");
+            setIsErrorModalOpen(false);
 
-            await fetchMenu();
-        } catch (error: any) {
-            const errorMessage =
-                error.response?.data?.error ||
-                "Failed to save menu item. Please try again.";
+            try {
+                if (editingItem) {
+                    const payload = {
+                        name: formData.name.trim(),
 
-            setServerError(errorMessage);
-            setIsErrorModalOpen(true);
-        } finally {
-            setActionLoading(false);
-        }
-    };
+                        flavour:
+                            formData.flavour.trim(),
 
-    // --------------------------------------------------
-    // AVAILABILITY
-    // --------------------------------------------------
+                        description:
+                            formData.description.trim(),
 
-    const handleToggleAvailability = async (
-        item: MenuItem
-    ) => {
-        try {
-            await axios.patch(
-                `/api/admin/menu/${item._id}`,
-                {
-                    available:
-                        !item.available,
+                        available:
+                            formData.available,
+
+                        offerId:
+                            formData.offerId ||
+                            null,
+                    };
+
+                    await axios.put(
+                        `/api/admin/menu/${editingItem._id}`,
+                        payload
+                    );
+                    handleCloseFormModal();
+
+                    await fetchMenu();
+
+                    showToast("Menu item updated", "success");
+                } else {
+                    const payload = {
+                        name: formData.name.trim(),
+
+                        flavour:
+                            formData.flavour.trim(),
+
+                        weight: Number(
+                            formData.weight
+                        ),
+
+                        price: Number(
+                            formData.price
+                        ),
+
+                        description:
+                            formData.description.trim(),
+
+                        available:
+                            formData.available,
+
+                        offerId:
+                            formData.offerId ||
+                            null,
+                    };
+
+                    await axios.post(
+                        "/api/admin/menu",
+                        payload
+                    );
+
+                    handleCloseFormModal();
+
+                    await fetchMenu();
+
+                    showToast("Menu item added", "success");
                 }
-            );
 
-            await fetchMenu();
-        } catch (error) {
-            console.info(
-                "Failed to update availability:",
-                error
-            );
-        }
-    };
+                // handleCloseFormModal();
 
-    // --------------------------------------------------
+                // await fetchMenu();
+            } catch (error: any) {
+                const errorMessage =
+                    error?.response
+                        ?.data?.error ||
+                    error?.response
+                        ?.data?.message ||
+                    "Failed to save menu item. Please try again.";
+
+                setServerError(
+                    errorMessage
+                );
+
+                setIsErrorModalOpen(
+                    true
+                );
+            } finally {
+                setActionLoading(false);
+            }
+        };
+
+    // ========================================================
+    // AVAILABILITY
+    // ========================================================
+
+    const handleToggleAvailability =
+        async (
+            item: MenuItem
+        ) => {
+            try {
+                await axios.patch(
+                    `/api/admin/menu/${item._id}`,
+                    {
+                        available:
+                            !item.available,
+                    }
+                );
+
+                await fetchMenu();
+
+                showToast(
+                    item.available
+                        ? "Menu item marked unavailable"
+                        : "Menu item marked available",
+                    "success"
+                );
+            } catch (error: any) {
+                const errorMessage =
+                    error?.response
+                        ?.data?.error ||
+                    "Failed to update availability.";
+
+                setServerError(
+                    errorMessage
+                );
+
+                setIsErrorModalOpen(
+                    true
+                );
+            }
+        };
+
+    // ========================================================
     // DELETE
-    // --------------------------------------------------
+    // ========================================================
 
-    const handleDeleteConfirm = async () => {
-        if (!itemToDelete) {
-            return;
-        }
+    const handleDeleteConfirm =
+        async () => {
+            if (!itemToDelete) {
+                return;
+            }
 
-        setActionLoading(true);
+            setActionLoading(true);
 
-        try {
-            await axios.delete(
-                `/api/admin/menu/${itemToDelete._id}`
-            );
+            try {
+                await axios.delete(
+                    `/api/admin/menu/${itemToDelete._id}`
+                );
 
-            setIsDeleteModalOpen(false);
-            setItemToDelete(null);
+                setIsDeleteModalOpen(
+                    false
+                );
 
-            await fetchMenu();
-        } catch (error: any) {
-            const errorMessage =
-                error.response?.data?.error ||
-                "Failed to delete menu item. Please try again.";
+                setItemToDelete(null);
 
-            setServerError(errorMessage);
-            setIsErrorModalOpen(true);
-        } finally {
-            setActionLoading(false);
-        }
-    };
+                await fetchMenu();
 
-    // --------------------------------------------------
+                showToast("Menu item deleted", "success");
+            } catch (error: any) {
+                const errorMessage =
+                    error?.response
+                        ?.data?.error ||
+                    error?.response
+                        ?.data?.message ||
+                    "Failed to delete menu item. Please try again.";
+
+                setServerError(
+                    errorMessage
+                );
+
+                setIsErrorModalOpen(
+                    true
+                );
+            } finally {
+                setActionLoading(false);
+            }
+        };
+
+    // ========================================================
+    // CURRENT EDIT OFFER
+    // ========================================================
+
+    const currentEditOffer =
+        editingItem?.offer || null;
+
+    /**
+     * ALL offers are available in dropdown.
+     *
+     * This means:
+     *
+     * ACTIVE   -> selectable
+     * UPCOMING -> selectable
+     * EXPIRED  -> visible, but clearly marked
+     *
+     * We keep the currently attached offer even if the
+     * backend did not return it in the offers endpoint.
+     */
+    const offersForDropdown = [
+        ...offers,
+
+        ...(currentEditOffer &&
+            !offers.some(
+                (offer) =>
+                    offer._id ===
+                    currentEditOffer._id
+            )
+            ? [currentEditOffer]
+            : []),
+    ];
+
+    // ========================================================
+    // SELECTED OFFER
+    // ========================================================
+
+    const selectedOffer =
+        formData.offerId
+            ? offersForDropdown.find(
+                (offer) =>
+                    offer._id ===
+                    formData.offerId
+            )
+            : null;
+
+    // ========================================================
     // UI
-    // --------------------------------------------------
-    // <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 p-4 md:p-8 transition-colors duration-300">
+    // ========================================================
+
     return (
+        <div
+            className="
+                min-h-screen
+                bg-amber-50/30
+                dark:bg-stone-950
+                text-stone-800
+                dark:text-stone-100
+                pt-20
+                px-4
+                pb-4
+                md:pt-20
+                md:px-8
+                md:pb-8
+                lg:pt-8
+                transition-colors
+                duration-300
+            "
+        >
 
+            {/* TOAST */}
 
-        <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 pt-20 px-4 pb-4 md:pt-20 md:px-8 md:pb-8 lg:pt-8 transition-colors duration-300">
+            <Toast
+                isOpen={toast.isOpen}
+                message={toast.message}
+                type={toast.type}
+                onClose={() =>
+                    setToast((prev) => ({
+                        ...prev,
+                        isOpen: false,
+                    }))
+                }
+            />
 
-            <div className="max-w-7xl mx-auto space-y-6">
+            <div
+                className="
+                    max-w-7xl
+                    mx-auto
+                    space-y-6
+                "
+            >
+                {/* ==================================================
+                    HEADER
+                ================================================== */}
 
-                {/* HEADER */}
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 border-b border-stone-200 dark:border-stone-800 pb-6">
-
+                <div
+                    className="
+                        flex
+                        flex-col
+                        sm:flex-row
+                        sm:items-center
+                        sm:justify-between
+                        gap-5
+                        border-b
+                        border-stone-200
+                        dark:border-stone-800
+                        pb-6
+                    "
+                >
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 dark:text-stone-50">
-                            Menu Items
-                        </h1>
+                        <div
+                            className="
+                                flex
+                                items-center
+                                gap-2
+                            "
+                        >
+                            <div
+                                className="
+                                    w-9
+                                    h-9
+                                    rounded-xl
+                                    bg-pink-100
+                                    dark:bg-pink-950/40
+                                    text-pink-600
+                                    dark:text-pink-400
+                                    flex
+                                    items-center
+                                    justify-center
+                                "
+                            >
+                                <CakeSlice className="w-5 h-5" />
+                            </div>
 
-                        <p className="text-xs md:text-sm text-stone-500 dark:text-stone-400 mt-1">
-                            Manage bakery products, flavours,
-                            availability, and listings.
+                            <h1
+                                className="
+                                    text-2xl
+                                    md:text-3xl
+                                    font-serif
+                                    font-bold
+                                    text-stone-900
+                                    dark:text-stone-50
+                                "
+                            >
+                                Menu Items
+                            </h1>
+                        </div>
+
+                        <p
+                            className="
+                                text-xs
+                                md:text-sm
+                                text-stone-500
+                                dark:text-stone-400
+                                mt-2
+                            "
+                        >
+                            Manage bakery
+                            products,
+                            flavours,
+                            offers,
+                            availability,
+                            and listings.
                         </p>
                     </div>
 
@@ -535,15 +1168,23 @@ export default function MenuList() {
                             handleOpenFormModal()
                         }
                         className="
-                            inline-flex items-center justify-center gap-2
-                            bg-pink-600 hover:bg-pink-700
-                            dark:bg-pink-500 dark:hover:bg-pink-600
+                            inline-flex
+                            items-center
+                            justify-center
+                            gap-2
+                            bg-pink-600
+                            hover:bg-pink-700
+                            dark:bg-pink-500
+                            dark:hover:bg-pink-600
                             text-white
                             font-medium
-                            text-xs md:text-sm
-                            px-5 py-2.5
+                            text-xs
+                            md:text-sm
+                            px-5
+                            py-2.5
                             rounded-full
                             shadow-lg
+                            shadow-pink-600/20
                             transition-all
                             active:scale-95
                             cursor-pointer
@@ -554,13 +1195,46 @@ export default function MenuList() {
                     </button>
                 </div>
 
-                {/* SEARCH */}
+                {/* ==================================================
+                    SEARCH + OFFER SUMMARY
+                ================================================== */}
 
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 p-4 rounded-2xl shadow-sm">
-
-                    <div className="relative w-full md:w-80">
-
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <div
+                    className="
+                        flex
+                        flex-col
+                        md:flex-row
+                        md:items-center
+                        md:justify-between
+                        gap-4
+                        bg-white
+                        dark:bg-stone-900
+                        border
+                        border-stone-200/80
+                        dark:border-stone-800
+                        p-4
+                        rounded-2xl
+                        shadow-sm
+                    "
+                >
+                    <div
+                        className="
+                            relative
+                            w-full
+                            md:w-96
+                        "
+                    >
+                        <Search
+                            className="
+                                absolute
+                                left-3.5
+                                top-1/2
+                                -translate-y-1/2
+                                w-4
+                                h-4
+                                text-stone-400
+                            "
+                        />
 
                         <input
                             type="text"
@@ -573,16 +1247,24 @@ export default function MenuList() {
                             placeholder="Search cakes, flavours..."
                             className="
                                 w-full
-                                pl-10 pr-9 py-2
+                                pl-10
+                                pr-10
+                                py-2.5
                                 rounded-full
-                                border border-stone-200 dark:border-stone-800
-                                bg-stone-50/50 dark:bg-stone-950
-                                text-xs md:text-sm
-                                text-stone-900 dark:text-stone-100
+                                border
+                                border-stone-200
+                                dark:border-stone-800
+                                bg-stone-50/50
+                                dark:bg-stone-950
+                                text-xs
+                                md:text-sm
+                                text-stone-900
+                                dark:text-stone-100
                                 placeholder-stone-400
                                 focus:outline-none
                                 focus:ring-2
-                                focus:ring-pink-500
+                                focus:ring-pink-500/50
+                                focus:border-pink-500
                             "
                         />
 
@@ -593,10 +1275,13 @@ export default function MenuList() {
                                     setSearch("")
                                 }
                                 className="
-                                    absolute right-3 top-1/2
+                                    absolute
+                                    right-3
+                                    top-1/2
                                     -translate-y-1/2
                                     text-stone-400
-                                    hover:text-stone-600
+                                    hover:text-stone-700
+                                    dark:hover:text-stone-200
                                 "
                             >
                                 <X className="w-4 h-4" />
@@ -604,411 +1289,1009 @@ export default function MenuList() {
                         )}
                     </div>
 
-                    <div className="text-xs text-stone-500 dark:text-stone-400">
-                        Showing{" "}
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">
-                            {items.length}
-                        </span>{" "}
-                        of{" "}
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">
-                            {totalItems}
-                        </span>{" "}
-                        items
+                    <div
+                        className="
+                            flex
+                            flex-wrap
+                            items-center
+                            gap-2
+                            md:justify-end
+                        "
+                    >
+                        {/* STATUS WITH COUNT */}
+
+                        {/* <div
+                            className="
+                                inline-flex
+                                items-center
+                                gap-2
+                                px-3
+                                py-2
+                                rounded-xl
+                                bg-emerald-50
+                                dark:bg-emerald-950/20
+                                border
+                                border-emerald-100
+                                dark:border-emerald-900
+                            "
+                        >
+                            <CheckCircle
+                                className="
+                                    w-3.5
+                                    h-3.5
+                                    text-emerald-600
+                                    dark:text-emerald-400
+                                "
+                            />
+
+                            <span
+                                className="
+                                    text-xs
+                                    font-medium
+                                    text-emerald-700
+                                    dark:text-emerald-300
+                                "
+                            >
+                                {activeOfferCount} active
+                            </span>
+                        </div>
+
+
+                        <div
+                            className="
+                                inline-flex
+                                items-center
+                                gap-2
+                                px-3
+                                py-2
+                                rounded-xl
+                                bg-amber-50
+                                dark:bg-amber-950/20
+                                border
+                                border-amber-100
+                                dark:border-amber-900
+                            "
+                        >
+                            <Clock3
+                                className="
+                                    w-3.5
+                                    h-3.5
+                                    text-amber-600
+                                    dark:text-amber-400
+                                "
+                            />
+
+                            <span
+                                className="
+                                    text-xs
+                                    font-medium
+                                    text-amber-700
+                                    dark:text-amber-300
+                                "
+                            >
+                                {upcomingOfferCount} upcoming
+                            </span>
+                        </div>
+
+                        <div
+                            className="
+        inline-flex
+        items-center
+        gap-2
+        px-3
+        py-2
+        rounded-xl
+        bg-stone-100
+        dark:bg-stone-900/40
+        border
+        border-stone-200
+        dark:border-stone-800
+    "
+                        >
+                            <XCircle
+                                className="
+            w-3.5
+            h-3.5
+            text-stone-500
+            dark:text-stone-400
+        "
+                            />
+
+                            <span
+                                className="
+            text-xs
+            font-medium
+            text-stone-700
+            dark:text-stone-300
+        "
+                            >
+                                {expiredOfferCount} expired
+                            </span>
+                        </div> */}
+
+                        {/* TOTAL ITEMS */}
+
+                        <div
+                            className="
+                                text-xs
+                                text-stone-500
+                                dark:text-stone-400
+                                ml-1
+                            "
+                        >
+                            Showing{" "}
+                            <span
+                                className="
+                                    font-semibold
+                                    text-stone-800
+                                    dark:text-stone-200
+                                "
+                            >
+                                {items.length}
+                            </span>{" "}
+                            of{" "}
+                            <span
+                                className="
+                                    font-semibold
+                                    text-stone-800
+                                    dark:text-stone-200
+                                "
+                            >
+                                {totalItems}
+                            </span>{" "}
+                            items
+                        </div>
                     </div>
                 </div>
 
-                {/* TABLE */}
+                {/* ==================================================
+                    OFFER STATUS LEGEND
+                ================================================== */}
 
-                <div className="bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 rounded-2xl shadow-sm overflow-hidden">
+                {/* <div
+                    className="
+                        flex
+                        flex-wrap
+                        items-center
+                        gap-3
+                        px-1
+                    "
+                >
+                    <span
+                        className="
+                            text-[10px]
+                            uppercase
+                            tracking-wider
+                            font-semibold
+                            text-stone-400
+                        "
+                    >
+                        Offer status
+                    </span>
 
+                    {(
+                        [
+                            "ACTIVE",
+                            "UPCOMING",
+                            "EXPIRED",
+                            "INACTIVE",
+                        ] as OfferStatus[]
+                    ).map((status) => {
+                        const config =
+                            getOfferStatusConfig(
+                                status
+                            );
+
+                        const Icon =
+                            config.icon;
+
+                        return (
+                            <span
+                                key={status}
+                                className={`
+                                    inline-flex
+                                    items-center
+                                    gap-1.5
+                                    px-2.5
+                                    py-1
+                                    rounded-full
+                                    border
+                                    text-[10px]
+                                    font-bold
+                                    ${config.badgeClass}
+                                `}
+                            >
+                                <Icon className="w-3 h-3" />
+                                <span
+                                    className="
+            text-xs
+            font-medium
+            text-stone-700
+            dark:text-stone-300
+        "
+                                >
+                                    {status === "ACTIVE"
+                                        ? activeOfferCount
+                                        : status === "UPCOMING"
+                                            ? upcomingOfferCount
+                                            : status === "EXPIRED"
+                                                ? expiredOfferCount
+                                                : status === "INACTIVE"
+                                                    ? inactiveOfferCount
+                                                    : 0}
+                                </span>
+                                {status}
+                            </span>
+                        );
+                    })}
+                </div> */}
+
+                {/* ==================================================
+                    TABLE
+                ================================================== */}
+
+                <div
+                    className="
+                        bg-white
+                        dark:bg-stone-900
+                        border
+                        border-stone-200/80
+                        dark:border-stone-800
+                        rounded-2xl
+                        shadow-sm
+                        overflow-hidden
+                    "
+                >
                     {loading ? (
-                        <div className="p-12 text-center text-stone-500 dark:text-stone-400 space-y-3">
-                            <Sparkles className="w-6 h-6 animate-spin mx-auto text-pink-500" />
+                        <div
+                            className="
+                                p-16
+                                text-center
+                                text-stone-500
+                                dark:text-stone-400
+                                space-y-3
+                            "
+                        >
+                            <Sparkles
+                                className="
+                                    w-7
+                                    h-7
+                                    animate-spin
+                                    mx-auto
+                                    text-pink-500
+                                "
+                            />
 
                             <p className="text-xs md:text-sm">
-                                Fetching bakery menu...
+                                Fetching bakery
+                                menu...
                             </p>
                         </div>
-                    ) : items.length === 0 ? (
-                        <div className="p-12 text-center text-stone-500 dark:text-stone-400 space-y-2">
-                            <p className="font-medium text-sm">
-                                No menu items found
+                    ) : items.length ===
+                        0 ? (
+                        <div
+                            className="
+                                p-16
+                                text-center
+                                text-stone-500
+                                dark:text-stone-400
+                            "
+                        >
+                            <div
+                                className="
+                                    w-14
+                                    h-14
+                                    mx-auto
+                                    rounded-2xl
+                                    bg-stone-100
+                                    dark:bg-stone-800
+                                    flex
+                                    items-center
+                                    justify-center
+                                    mb-4
+                                "
+                            >
+                                <CakeSlice className="w-6 h-6" />
+                            </div>
+
+                            <p
+                                className="
+                                    font-semibold
+                                    text-sm
+                                    text-stone-700
+                                    dark:text-stone-300
+                                "
+                            >
+                                No menu items
+                                found
                             </p>
 
-                            <p className="text-xs">
-                                Try adjusting your search
-                                or add a new cake item.
+                            <p className="text-xs mt-1">
+                                Try adjusting
+                                your search
+                                or add a new
+                                cake item.
                             </p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-
-                            <table className="w-full min-w-[750px] table-fixed text-left border-collapse">
-
-                                {/* FIXED COLUMN WIDTHS */}
+                            <table
+                                className="
+                                    w-full
+                                    min-w-[1100px]
+                                    table-fixed
+                                    text-left
+                                    border-collapse
+                                "
+                            >
                                 <colgroup>
-                                    <col className="w-[38%]" />
-                                    <col className="w-[20%]" />
-                                    <col className="w-[20%]" />
-                                    <col className="w-[22%]" />
+                                    <col className="w-[27%]" />
+                                    <col className="w-[15%]" />
+                                    <col className="w-[29%]" />
+                                    <col className="w-[14%]" />
+                                    <col className="w-[15%]" />
                                 </colgroup>
 
                                 <thead>
-                                    <tr className="
-                        border-b
-                        border-stone-200/80
-                        dark:border-stone-800
-                        bg-stone-50/50
-                        dark:bg-stone-950/50
-                        text-[11px]
-                        uppercase
-                        tracking-wider
-                        text-stone-500
-                        dark:text-stone-400
-                    ">
-                                        <th className="px-4 py-4 text-left">
+                                    <tr
+                                        className="
+                                            border-b
+                                            border-stone-200/80
+                                            dark:border-stone-800
+                                            bg-stone-50/60
+                                            dark:bg-stone-950/50
+                                            text-[10px]
+                                            md:text-[11px]
+                                            uppercase
+                                            tracking-wider
+                                            text-stone-500
+                                            dark:text-stone-400
+                                        "
+                                    >
+                                        <th className="px-5 py-4">
                                             Product
                                         </th>
 
-                                        <th className="px-4 py-4 text-left">
+                                        <th className="px-4 py-4">
                                             Flavour
                                         </th>
 
-                                        <th className="px-4 py-4 text-left">
+                                        <th className="px-4 py-4">
+                                            Offer
+                                        </th>
+
+                                        <th className="px-4 py-4">
                                             Status
                                         </th>
 
-                                        <th className="px-4 py-4 text-right">
+                                        <th className="px-5 py-4 text-right">
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
 
-                                <tbody className="
-                    divide-y
-                    divide-stone-200/60
-                    dark:divide-stone-800
-                    text-xs md:text-sm
-                ">
+                                <tbody
+                                    className="
+                                        divide-y
+                                        divide-stone-200/60
+                                        dark:divide-stone-800
+                                        text-xs
+                                        md:text-sm
+                                    "
+                                >
+                                    {items.map(
+                                        (
+                                            item
+                                        ) => {
+                                            const attachedOffer =
+                                                item.offer ||
+                                                null;
 
-                                    {items.map((item) => (
-                                        <tr
-                                            key={item._id}
-                                            className="
-                                hover:bg-stone-50/50
-                                dark:hover:bg-stone-800/40
-                                transition-colors
-                            "
-                                        >
+                                            const hasOffer =
+                                                Boolean(
+                                                    item.offerId ||
+                                                    item.offer
+                                                );
 
-                                            {/* PRODUCT */}
+                                            const offerStatus =
+                                                attachedOffer
+                                                    ? getOfferStatus(
+                                                        attachedOffer
+                                                    )
+                                                    : null;
 
-                                            <td className="px-4 py-4 align-middle">
-                                                <div className="min-w-0">
+                                            const offerConfig =
+                                                offerStatus
+                                                    ? getOfferStatusConfig(
+                                                        offerStatus
+                                                    )
+                                                    : null;
 
-                                                    <p className="
-                                        font-semibold
-                                        text-stone-900
-                                        dark:text-stone-100
-                                        truncate
-                                    ">
-                                                        {item.name}
-                                                    </p>
+                                            const OfferStatusIcon =
+                                                offerConfig?.icon;
 
-                                                    <p className="
-    text-[11px]
-    text-stone-500
-    dark:text-stone-400
-    mt-0.5
-">
-                                                        {item.description
-                                                            ? `${item.description.slice(0, 22)}${item.description.length > 22 ? "..." : ""}`
-                                                            : "No description"}
-                                                    </p>
-
-                                                </div>
-                                            </td>
-
-                                            {/* FLAVOUR */}
-
-                                            <td className="
-                                px-4 py-4
-                                align-middle
-                                font-medium
-                                text-stone-700
-                                dark:text-stone-300
-                            ">
-                                                <div className="truncate">
-                                                    {item.flavour}
-                                                </div>
-                                            </td>
-
-                                            {/* STATUS */}
-
-                                            <td className="px-4 py-4 align-middle">
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        handleToggleAvailability(item)
+                                            return (
+                                                <tr
+                                                    key={
+                                                        item._id
                                                     }
                                                     className={`
-                                        inline-flex
-                                        items-center
-                                        gap-1.5
-                                        px-3
-                                        py-1
-                                        rounded-full
-                                        text-[11px]
-                                        font-medium
-                                        cursor-pointer
-                                        whitespace-nowrap
-
-                                        ${item.available
-                                                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                                                            : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700"
+                                                        transition-colors
+                                                        ${hasOffer
+                                                            ? "bg-pink-50/30 dark:bg-pink-950/10 hover:bg-pink-50/60 dark:hover:bg-pink-950/20"
+                                                            : "hover:bg-stone-50/60 dark:hover:bg-stone-800/40"
                                                         }
-                                    `}
+                                                    `}
                                                 >
-                                                    <span
-                                                        className={`
-                                            w-1.5
-                                            h-1.5
-                                            rounded-full
-                                            shrink-0
+                                                    {/* PRODUCT */}
 
-                                            ${item.available
-                                                                ? "bg-emerald-500"
-                                                                : "bg-stone-400"
+                                                    <td className="px-5 py-4 align-middle">
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className="
+                                                                    w-11
+                                                                    h-11
+                                                                    rounded-xl
+                                                                    bg-pink-100
+                                                                    dark:bg-pink-950/40
+                                                                    border
+                                                                    border-pink-200
+                                                                    dark:border-pink-800
+                                                                    flex
+                                                                    items-center
+                                                                    justify-center
+                                                                    text-pink-600
+                                                                    dark:text-pink-400
+                                                                    shrink-0
+                                                                "
+                                                            >
+                                                                <CakeSlice className="w-5 h-5" />
+                                                            </div>
+
+                                                            <div className="min-w-0">
+                                                                <p
+                                                                    className="
+                                                                        font-semibold
+                                                                        text-stone-900
+                                                                        dark:text-stone-100
+                                                                        truncate
+                                                                    "
+                                                                >
+                                                                    {
+                                                                        item.name
+                                                                    }
+                                                                </p>
+
+                                                                <p
+                                                                    className="
+                                                                        text-[11px]
+                                                                        text-stone-500
+                                                                        dark:text-stone-400
+                                                                        truncate
+                                                                        max-w-[230px]
+                                                                        mt-0.5
+                                                                    "
+                                                                >
+                                                                    {
+                                                                        item.description
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* FLAVOUR */}
+
+                                                    <td className="px-4 py-4 align-middle">
+                                                        <span
+                                                            className="
+                                                                inline-flex
+                                                                items-center
+                                                                px-2.5
+                                                                py-1.5
+                                                                rounded-full
+                                                                text-[11px]
+                                                                font-medium
+                                                                bg-stone-100
+                                                                dark:bg-stone-800
+                                                                text-stone-700
+                                                                dark:text-stone-300
+                                                                border
+                                                                border-stone-200
+                                                                dark:border-stone-700
+                                                            "
+                                                        >
+                                                            {
+                                                                item.flavour
                                                             }
-                                        `}
-                                                    />
+                                                        </span>
+                                                    </td>
 
-                                                    {item.available
-                                                        ? "Available"
-                                                        : "Not Available"}
-                                                </button>
+                                                    {/* OFFER */}
 
-                                            </td>
+                                                    <td className="px-4 py-4 align-middle">
+                                                        {attachedOffer ? (
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Tag
+                                                                        className={`
+                                                                            w-3.5
+                                                                            h-3.5
+                                                                            shrink-0
+                                                                            ${offerConfig?.iconClass
+                                                                            }
+                                                                        `}
+                                                                    />
 
-                                            {/* ACTIONS */}
+                                                                    <span
+                                                                        className={`
+                                                                            text-xs
+                                                                            font-semibold
+                                                                            truncate
+                                                                            ${offerConfig?.titleClass
+                                                                            }
+                                                                        `}
+                                                                    >
+                                                                        {
+                                                                            attachedOffer.title
+                                                                        }
+                                                                    </span>
 
-                                            <td className="
-                                px-4 py-4
-                                align-middle
-                                text-right
-                            ">
+                                                                    {OfferStatusIcon &&
+                                                                        offerConfig && (
+                                                                            <span
+                                                                                className={`
+                                                                                    inline-flex
+                                                                                    items-center
+                                                                                    gap-1
+                                                                                    shrink-0
+                                                                                    px-1.5
+                                                                                    py-0.5
+                                                                                    rounded-full
+                                                                                    border
+                                                                                    text-[9px]
+                                                                                    font-bold
+                                                                                    ${offerConfig.badgeClass}
+                                                                                `}
+                                                                            >
+                                                                                <OfferStatusIcon className="w-2.5 h-2.5" />
+                                                                                {
+                                                                                    offerConfig.label
+                                                                                }
+                                                                            </span>
+                                                                        )}
+                                                                </div>
 
-                                                <div className="
-                                    flex
-                                    items-center
-                                    justify-end
-                                    gap-2
-                                ">
+                                                                <div
+                                                                    className="
+                                                                        flex
+                                                                        items-center
+                                                                        gap-1.5
+                                                                        text-[11px]
+                                                                        font-semibold
+                                                                        text-stone-600
+                                                                        dark:text-stone-300
+                                                                    "
+                                                                >
+                                                                    {/* {attachedOffer.discountType ===
+                                                                    "PERCENTAGE" ? (
+                                                                        <Percent className="w-3 h-3 text-pink-500" />
+                                                                    ) : (
+                                                                        <IndianRupee className="w-3 h-3 text-pink-500" />
+                                                                    )} */}
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            handleOpenFormModal(item)
-                                                        }
-                                                        className="
-                                            p-2
-                                            text-stone-600
-                                            dark:text-stone-300
-                                            hover:text-pink-600
-                                            dark:hover:text-pink-400
-                                            bg-stone-100
-                                            dark:bg-stone-800
-                                            hover:bg-pink-50
-                                            dark:hover:bg-pink-950/40
-                                            rounded-full
-                                            transition-colors
-                                        "
-                                                        title="Edit Item"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
+                                                                    {
+                                                                        formatOfferValue(
+                                                                            attachedOffer
+                                                                        )
+                                                                    }
+                                                                </div>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setItemToDelete(item);
-                                                            setIsDeleteModalOpen(true);
-                                                        }}
-                                                        className="
-                                            p-2
-                                            text-stone-600
-                                            dark:text-stone-300
-                                            hover:text-rose-600
-                                            dark:hover:text-rose-400
-                                            bg-stone-100
-                                            dark:bg-stone-800
-                                            hover:bg-rose-50
-                                            dark:hover:bg-rose-950/40
-                                            rounded-full
-                                            transition-colors
-                                        "
-                                                        title="Delete Item"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                                <div
+                                                                    className="
+                                                                        flex
+                                                                        items-center
+                                                                        gap-1.5
+                                                                        text-[10px]
+                                                                        text-stone-400
+                                                                    "
+                                                                >
+                                                                    <CalendarDays className="w-3 h-3" />
 
-                                                </div>
+                                                                    <span className="truncate">
+                                                                        {
+                                                                            formatShortOfferDate(
+                                                                                attachedOffer.startDate
+                                                                            )
+                                                                        }{" "}
+                                                                        →
+                                                                        {" "}
+                                                                        {
+                                                                            formatShortOfferDate(
+                                                                                attachedOffer.endDate
+                                                                            )
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2">
+                                                                <span
+                                                                    className="
+                                                                        w-7
+                                                                        h-7
+                                                                        rounded-lg
+                                                                        bg-stone-100
+                                                                        dark:bg-stone-800
+                                                                        flex
+                                                                        items-center
+                                                                        justify-center
+                                                                    "
+                                                                >
+                                                                    <Tag
+                                                                        className="
+                                                                            w-3.5
+                                                                            h-3.5
+                                                                            text-stone-400
+                                                                        "
+                                                                    />
+                                                                </span>
 
-                                            </td>
+                                                                <span
+                                                                    className="
+                                                                        text-xs
+                                                                        text-stone-400
+                                                                        italic
+                                                                    "
+                                                                >
+                                                                    No
+                                                                    offer
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </td>
 
-                                        </tr>
-                                    ))}
+                                                    {/* PRODUCT AVAILABILITY */}
 
+                                                    <td className="px-4 py-4 align-middle">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleToggleAvailability(
+                                                                    item
+                                                                )
+                                                            }
+                                                            className={`
+                                                                inline-flex
+                                                                items-center
+                                                                gap-1.5
+                                                                px-3
+                                                                py-1.5
+                                                                rounded-full
+                                                                text-[11px]
+                                                                font-semibold
+                                                                transition-all
+                                                                cursor-pointer
+                                                                ${item.available
+                                                                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/70"
+                                                                    : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/70"
+                                                                }
+                                                            `}
+                                                        >
+                                                            {item.available ? (
+                                                                <>
+                                                                    <CheckCircle className="w-3.5 h-3.5" />
+                                                                    Available
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <XCircle className="w-3.5 h-3.5" />
+                                                                    Unavailable
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </td>
+
+                                                    {/* ACTIONS */}
+
+                                                    <td className="px-5 py-4 align-middle">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleOpenFormModal(
+                                                                        item
+                                                                    )
+                                                                }
+                                                                className="
+                                                                    p-2
+                                                                    rounded-xl
+                                                                    text-stone-500
+                                                                    hover:text-pink-600
+                                                                    hover:bg-pink-50
+                                                                    dark:text-stone-400
+                                                                    dark:hover:text-pink-400
+                                                                    dark:hover:bg-pink-950/30
+                                                                    transition-colors
+                                                                "
+                                                                title="Edit Menu Item"
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setItemToDelete(
+                                                                        item
+                                                                    );
+
+                                                                    setIsDeleteModalOpen(
+                                                                        true
+                                                                    );
+                                                                }}
+                                                                className="
+                                                                    p-2
+                                                                    rounded-xl
+                                                                    text-stone-500
+                                                                    hover:text-rose-600
+                                                                    hover:bg-rose-50
+                                                                    dark:text-stone-400
+                                                                    dark:hover:text-rose-400
+                                                                    dark:hover:bg-rose-950/30
+                                                                    transition-colors
+                                                                "
+                                                                title="Delete Menu Item"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+                                    )}
                                 </tbody>
-
                             </table>
                         </div>
                     )}
 
-                    {/* PAGINATION */}
+                    {/* ==================================================
+                        PAGINATION
+                    ================================================== */}
 
-                    {totalPages > 1 && (
-                        <div className="
-            p-4
-            border-t
-            border-stone-200/80
-            dark:border-stone-800
-            flex
-            items-center
-            justify-between
-            bg-stone-50/50
-            dark:bg-stone-950/50
-        ">
-
-                            <span className="
-                text-xs
-                text-stone-500
-                dark:text-stone-400
-            ">
-                                Page{" "}
-                                <span className="
-                    font-semibold
-                    text-stone-800
-                    dark:text-stone-200
-                ">
-                                    {currentPage}
-                                </span>{" "}
-                                of {totalPages}
-                            </span>
-
-                            <div className="flex items-center gap-2">
-
-                                <button
-                                    type="button"
-                                    disabled={currentPage === 1}
-                                    onClick={() =>
-                                        setCurrentPage((prev) =>
-                                            Math.max(prev - 1, 1)
-                                        )
-                                    }
+                    {!loading &&
+                        items.length >
+                        0 && (
+                            <div
+                                className="
+                                    flex
+                                    items-center
+                                    justify-between
+                                    px-5
+                                    md:px-6
+                                    py-4
+                                    border-t
+                                    border-stone-200/80
+                                    dark:border-stone-800
+                                    bg-stone-50/30
+                                    dark:bg-stone-950/30
+                                "
+                            >
+                                <span
                                     className="
-                        p-2
-                        rounded-full
-                        border
-                        border-stone-200
-                        dark:border-stone-800
-                        hover:bg-white
-                        dark:hover:bg-stone-800
-                        disabled:opacity-40
-                        disabled:cursor-not-allowed
-                    "
+                                        text-xs
+                                        text-stone-500
+                                        dark:text-stone-400
+                                    "
                                 >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
+                                    Page{" "}
+                                    <span
+                                        className="
+                                            font-semibold
+                                            text-stone-800
+                                            dark:text-stone-200
+                                        "
+                                    >
+                                        {
+                                            currentPage
+                                        }
+                                    </span>{" "}
+                                    of{" "}
+                                    <span
+                                        className="
+                                            font-semibold
+                                            text-stone-800
+                                            dark:text-stone-200
+                                        "
+                                    >
+                                        {
+                                            totalPages
+                                        }
+                                    </span>
+                                </span>
 
-                                <button
-                                    type="button"
-                                    disabled={currentPage === totalPages}
-                                    onClick={() =>
-                                        setCurrentPage((prev) =>
-                                            Math.min(prev + 1, totalPages)
-                                        )
-                                    }
-                                    className="
-                        p-2
-                        rounded-full
-                        border
-                        border-stone-200
-                        dark:border-stone-800
-                        hover:bg-white
-                        dark:hover:bg-stone-800
-                        disabled:opacity-40
-                        disabled:cursor-not-allowed
-                    "
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            currentPage <=
+                                            1
+                                        }
+                                        onClick={() =>
+                                            setCurrentPage(
+                                                (
+                                                    p
+                                                ) =>
+                                                    Math.max(
+                                                        1,
+                                                        p -
+                                                        1
+                                                    )
+                                            )
+                                        }
+                                        className="
+                                            p-2
+                                            rounded-xl
+                                            border
+                                            border-stone-200
+                                            dark:border-stone-800
+                                            disabled:opacity-40
+                                            disabled:cursor-not-allowed
+                                            hover:bg-stone-100
+                                            dark:hover:bg-stone-800
+                                            text-stone-600
+                                            dark:text-stone-300
+                                            transition-colors
+                                        "
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
 
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            currentPage >=
+                                            totalPages
+                                        }
+                                        onClick={() =>
+                                            setCurrentPage(
+                                                (
+                                                    p
+                                                ) =>
+                                                    Math.min(
+                                                        totalPages,
+                                                        p +
+                                                        1
+                                                    )
+                                            )
+                                        }
+                                        className="
+                                            p-2
+                                            rounded-xl
+                                            border
+                                            border-stone-200
+                                            dark:border-stone-800
+                                            disabled:opacity-40
+                                            disabled:cursor-not-allowed
+                                            hover:bg-stone-100
+                                            dark:hover:bg-stone-800
+                                            text-stone-600
+                                            dark:text-stone-300
+                                            transition-colors
+                                        "
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
                 </div>
-
             </div>
 
-            {/* =========================================================
+            {/* ============================================================
                 CREATE / EDIT MODAL
-            ========================================================= */}
+            ============================================================ */}
 
             {isFormModalOpen && (
-                <div className="
-                    fixed inset-0 z-50
-                    bg-stone-950/60
-                    backdrop-blur-sm
-                    flex items-center justify-center
-                    p-4
-                ">
-
-                    <div className="
-                        w-full max-w-lg
-                        bg-white dark:bg-stone-900
-                        border border-stone-200
-                        dark:border-stone-800
-                        rounded-3xl
-                        p-6
-                        shadow-2xl
-                        space-y-5
-                        max-h-[90vh]
-                        overflow-y-auto
-                    ">
-
-                        {/* HEADER */}
-
-                        <div className="
-                            flex items-center justify-between
-                            border-b
+                <div
+                    className="
+                        fixed
+                        inset-0
+                        z-50
+                        flex
+                        items-center
+                        justify-center
+                        p-4
+                        bg-stone-950/60
+                        backdrop-blur-sm
+                        animate-in
+                        fade-in
+                        duration-200
+                    "
+                >
+                    <div
+                        className="
+                            bg-white
+                            dark:bg-stone-900
+                            border
                             border-stone-200
                             dark:border-stone-800
-                            pb-4
-                        ">
+                            rounded-3xl
+                            shadow-2xl
+                            w-full
+                            max-w-xl
+                            overflow-hidden
+                            max-h-[92vh]
+                            flex
+                            flex-col
+                        "
+                    >
+                        {/* MODAL HEADER */}
 
+                        <div
+                            className="
+                                flex
+                                items-center
+                                justify-between
+                                px-6
+                                py-5
+                                border-b
+                                border-stone-200
+                                dark:border-stone-800
+                                shrink-0
+                            "
+                        >
                             <div>
-                                <h3 className="
-                                    font-serif
-                                    font-bold
-                                    text-lg
-                                    text-stone-900
-                                    dark:text-stone-50
-                                ">
-                                    {editingItem
-                                        ? "Edit Menu Item"
-                                        : "Create New Menu Item"}
-                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <div
+                                        className="
+                                            w-8
+                                            h-8
+                                            rounded-lg
+                                            bg-pink-100
+                                            dark:bg-pink-950/40
+                                            text-pink-600
+                                            dark:text-pink-400
+                                            flex
+                                            items-center
+                                            justify-center
+                                        "
+                                    >
+                                        {editingItem ? (
+                                            <Edit2 className="w-4 h-4" />
+                                        ) : (
+                                            <Plus className="w-4 h-4" />
+                                        )}
+                                    </div>
 
-                                <p className="
-                                    text-[11px]
-                                    text-stone-500
-                                    mt-1
-                                ">
+                                    <h2
+                                        className="
+                                            text-lg
+                                            font-serif
+                                            font-bold
+                                            text-stone-900
+                                            dark:text-stone-100
+                                        "
+                                    >
+                                        {editingItem
+                                            ? "Edit Menu Item"
+                                            : "Add New Cake"}
+                                    </h2>
+                                </div>
+
+                                <p
+                                    className="
+                                        text-[11px]
+                                        text-stone-500
+                                        dark:text-stone-400
+                                        mt-1
+                                        ml-10
+                                    "
+                                >
                                     {editingItem
-                                        ? "Update cake menu details."
-                                        : "Add a cake and its first variant."}
+                                        ? "Update product details and offer."
+                                        : "Add a new cake to your bakery menu."}
                                 </p>
                             </div>
 
@@ -1018,41 +2301,46 @@ export default function MenuList() {
                                     handleCloseFormModal
                                 }
                                 className="
-                                    p-1.5
-                                    rounded-full
+                                    p-2
+                                    rounded-xl
                                     text-stone-400
-                                    hover:text-stone-600
-                                    dark:hover:text-stone-200
+                                    hover:text-stone-700
                                     hover:bg-stone-100
+                                    dark:hover:text-stone-200
                                     dark:hover:bg-stone-800
+                                    transition-colors
                                 "
                             >
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
+                        {/* FORM */}
+
                         <form
                             onSubmit={
                                 handleFormSubmit
                             }
-                            noValidate
                             className="
-                                space-y-4
-                                text-xs md:text-sm
+                                p-6
+                                space-y-5
+                                overflow-y-auto
                             "
                         >
-
                             {/* NAME */}
 
-                            <div className="space-y-1">
-
-                                <label className="
-                                    block
-                                    font-semibold
-                                    text-stone-700
-                                    dark:text-stone-300
-                                ">
-                                    Item Name
+                            <div>
+                                <label
+                                    className="
+                                        block
+                                        text-xs
+                                        font-semibold
+                                        text-stone-700
+                                        dark:text-stone-300
+                                        mb-1.5
+                                    "
+                                >
+                                    Cake Name *
                                 </label>
 
                                 <input
@@ -1062,35 +2350,37 @@ export default function MenuList() {
                                     }
                                     onChange={(e) =>
                                         setFormData(
-                                            (prev) => ({
-                                                ...prev,
-                                                name: e.target
+                                            {
+                                                ...formData,
+                                                name: e
+                                                    .target
                                                     .value,
-                                            })
+                                            }
                                         )
                                     }
-                                    placeholder="Vanilla Cake"
-                                    className={`
+                                    placeholder="e.g. White Forest"
+                                    className="
                                         w-full
-                                        px-4 py-2.5
-                                        rounded-full
+                                        px-3.5
+                                        py-2.5
+                                        rounded-xl
                                         border
-                                        bg-stone-50/50
+                                        border-stone-200
+                                        dark:border-stone-800
+                                        bg-stone-50
                                         dark:bg-stone-950
+                                        text-sm
                                         text-stone-900
                                         dark:text-stone-100
                                         focus:outline-none
                                         focus:ring-2
-
-                                        ${errors.name
-                                            ? "border-rose-500 focus:ring-rose-500"
-                                            : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-                                        }
-                                    `}
+                                        focus:ring-pink-500/40
+                                        focus:border-pink-500
+                                    "
                                 />
 
                                 {errors.name && (
-                                    <p className="text-[11px] text-rose-500 ml-3">
+                                    <p className="text-xs text-rose-500 mt-1.5">
                                         {
                                             errors.name
                                         }
@@ -1100,15 +2390,18 @@ export default function MenuList() {
 
                             {/* FLAVOUR */}
 
-                            <div className="space-y-1">
-
-                                <label className="
-                                    block
-                                    font-semibold
-                                    text-stone-700
-                                    dark:text-stone-300
-                                ">
-                                    Flavour
+                            <div>
+                                <label
+                                    className="
+                                        block
+                                        text-xs
+                                        font-semibold
+                                        text-stone-700
+                                        dark:text-stone-300
+                                        mb-1.5
+                                    "
+                                >
+                                    Flavour *
                                 </label>
 
                                 <input
@@ -1118,36 +2411,38 @@ export default function MenuList() {
                                     }
                                     onChange={(e) =>
                                         setFormData(
-                                            (prev) => ({
-                                                ...prev,
+                                            {
+                                                ...formData,
                                                 flavour:
-                                                    e.target
+                                                    e
+                                                        .target
                                                         .value,
-                                            })
+                                            }
                                         )
                                     }
-                                    placeholder="Vanilla"
-                                    className={`
+                                    placeholder="e.g. White Chocolate"
+                                    className="
                                         w-full
-                                        px-4 py-2.5
-                                        rounded-full
+                                        px-3.5
+                                        py-2.5
+                                        rounded-xl
                                         border
-                                        bg-stone-50/50
+                                        border-stone-200
+                                        dark:border-stone-800
+                                        bg-stone-50
                                         dark:bg-stone-950
+                                        text-sm
                                         text-stone-900
                                         dark:text-stone-100
                                         focus:outline-none
                                         focus:ring-2
-
-                                        ${errors.flavour
-                                            ? "border-rose-500 focus:ring-rose-500"
-                                            : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-                                        }
-                                    `}
+                                        focus:ring-pink-500/40
+                                        focus:border-pink-500
+                                    "
                                 />
 
                                 {errors.flavour && (
-                                    <p className="text-[11px] text-rose-500 ml-3">
+                                    <p className="text-xs text-rose-500 mt-1.5">
                                         {
                                             errors.flavour
                                         }
@@ -1158,100 +2453,68 @@ export default function MenuList() {
                             {/* WEIGHT + PRICE */}
 
                             {!editingItem && (
-                                <div className="
-                                    grid
-                                    grid-cols-1
-                                    sm:grid-cols-2
-                                    gap-4
-                                ">
-
-                                    {/* WEIGHT */}
-
-                                    <div className="space-y-1">
-
-                                        <label className="
-                                            block
-                                            font-semibold
-                                            text-stone-700
-                                            dark:text-stone-300
-                                        ">
-                                            Weight (Kg)
-                                        </label>
-
-                                        <div className="relative">
-
-                                            <input
-                                                type="number"
-                                                min="0.5"
-                                                step="0.1"
-                                                inputMode="decimal"
-                                                value={
-                                                    formData.weight
-                                                }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setFormData(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            weight: e
-                                                                .target
-                                                                .value,
-                                                        })
-                                                    )
-                                                }
-                                                placeholder="1"
-                                                className={`
-                                                    w-full
-                                                    pl-4
-                                                    pr-12
-                                                    py-2.5
-                                                    rounded-full
-                                                    border
-                                                    bg-stone-50/50
-                                                    dark:bg-stone-950
-                                                    text-stone-900
-                                                    dark:text-stone-100
-                                                    focus:outline-none
-                                                    focus:ring-2
-
-                                                    ${errors.weight
-                                                        ? "border-rose-500 focus:ring-rose-500"
-                                                        : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-                                                    }
-                                                `}
-                                            />
-
-                                            <span className="
-                                                absolute
-                                                right-4
-                                                top-1/2
-                                                -translate-y-1/2
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label
+                                            className="
+                                                block
                                                 text-xs
                                                 font-semibold
-                                                text-stone-400
-                                                pointer-events-none
-                                            ">
-                                                Kg
-                                            </span>
-                                        </div>
+                                                text-stone-700
+                                                dark:text-stone-300
+                                                mb-1.5
+                                            "
+                                        >
+                                            Initial Weight
+                                            (Kg) *
+                                        </label>
 
-                                        <p className="
-                                            text-[10px]
-                                            text-stone-400
-                                            ml-3
-                                        ">
+                                        <input
+                                            type="number"
+                                            min="0.5"
+                                            step="0.1"
+                                            value={
+                                                formData.weight
+                                            }
+                                            onChange={(
+                                                e
+                                            ) =>
+                                                setFormData(
+                                                    {
+                                                        ...formData,
+                                                        weight: e
+                                                            .target
+                                                            .value,
+                                                    }
+                                                )
+                                            }
+                                            placeholder="1.0"
+                                            className="
+                                                w-full
+                                                px-3.5
+                                                py-2.5
+                                                rounded-xl
+                                                border
+                                                border-stone-200
+                                                dark:border-stone-800
+                                                bg-stone-50
+                                                dark:bg-stone-950
+                                                text-sm
+                                                focus:outline-none
+                                                focus:ring-2
+                                                focus:ring-pink-500/40
+                                                focus:border-pink-500
+                                            "
+                                        />
+
+                                        <p className="text-[10px] text-stone-400 mt-1">
                                             Minimum 0.5 Kg
+                                            · 0.1 Kg
+                                            increments
                                         </p>
 
                                         {errors.weight && (
-                                            <p className="
-                                                text-[11px]
-                                                text-rose-500
-                                                ml-3
-                                            ">
+                                            <p className="text-xs text-rose-500 mt-1.5">
                                                 {
                                                     errors.weight
                                                 }
@@ -1259,64 +2522,60 @@ export default function MenuList() {
                                         )}
                                     </div>
 
-                                    {/* PRICE */}
-
-                                    <div className="space-y-1">
-
-                                        <label className="
-                                            block
-                                            font-semibold
-                                            text-stone-700
-                                            dark:text-stone-300
-                                        ">
-                                            Price (₹)
+                                    <div>
+                                        <label
+                                            className="
+                                                block
+                                                text-xs
+                                                font-semibold
+                                                text-stone-700
+                                                dark:text-stone-300
+                                                mb-1.5
+                                            "
+                                        >
+                                            Price (₹) *
                                         </label>
 
                                         <input
                                             type="number"
                                             min="1"
                                             step="1"
-                                            inputMode="numeric"
                                             value={
                                                 formData.price
                                             }
-                                            onChange={(e) =>
+                                            onChange={(
+                                                e
+                                            ) =>
                                                 setFormData(
-                                                    (prev) => ({
-                                                        ...prev,
+                                                    {
+                                                        ...formData,
                                                         price: e
                                                             .target
                                                             .value,
-                                                    })
+                                                    }
                                                 )
                                             }
-                                            placeholder="550"
-                                            className={`
+                                            placeholder="650"
+                                            className="
                                                 w-full
-                                                px-4
+                                                px-3.5
                                                 py-2.5
-                                                rounded-full
+                                                rounded-xl
                                                 border
-                                                bg-stone-50/50
+                                                border-stone-200
+                                                dark:border-stone-800
+                                                bg-stone-50
                                                 dark:bg-stone-950
-                                                text-stone-900
-                                                dark:text-stone-100
+                                                text-sm
                                                 focus:outline-none
                                                 focus:ring-2
-
-                                                ${errors.price
-                                                    ? "border-rose-500 focus:ring-rose-500"
-                                                    : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-                                                }
-                                            `}
+                                                focus:ring-pink-500/40
+                                                focus:border-pink-500
+                                            "
                                         />
 
                                         {errors.price && (
-                                            <p className="
-                                                text-[11px]
-                                                text-rose-500
-                                                ml-3
-                                            ">
+                                            <p className="text-xs text-rose-500 mt-1.5">
                                                 {
                                                     errors.price
                                                 }
@@ -1326,91 +2585,440 @@ export default function MenuList() {
                                 </div>
                             )}
 
-                            {/* AVAILABILITY */}
+                            {/* ==================================================
+                                OFFER
+                            ================================================== */}
 
-                            <div className="
-                                flex items-center justify-between
-                                p-3
-                                rounded-2xl
-                                bg-stone-50
-                                dark:bg-stone-950
-                                border
-                                border-stone-200
-                                dark:border-stone-800
-                            ">
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <div>
+                                        <label
+                                            className="
+                                                block
+                                                text-xs
+                                                font-semibold
+                                                text-stone-700
+                                                dark:text-stone-300
+                                            "
+                                        >
+                                            Attach Offer
+                                        </label>
 
-                                <div>
-                                    <p className="
-                                        text-xs
-                                        font-semibold
-                                        text-stone-700
-                                        dark:text-stone-300
-                                    ">
-                                        Availability
-                                    </p>
+                                        <p className="text-[10px] text-stone-400 mt-0.5">
+                                            Upcoming offers can
+                                            be attached now and
+                                            will become active
+                                            on their start date.
+                                        </p>
+                                    </div>
 
-                                    <p className="
-                                        text-[10px]
-                                        text-stone-400
-                                        mt-0.5
-                                    ">
-                                        Control whether customers
-                                        can order this cake.
-                                    </p>
+                                    {offersLoading && (
+                                        <span
+                                            className="
+                                                text-[10px]
+                                                text-stone-400
+                                            "
+                                        >
+                                            Loading offers...
+                                        </span>
+                                    )}
                                 </div>
 
-                                <label className="
-                                    flex items-center
-                                    gap-2
-                                    cursor-pointer
-                                    select-none
-                                ">
+                                <select
+                                    value={formData.offerId || ""}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            offerId: e.target.value || null,
+                                        })
+                                    }
+                                    disabled={offersLoading}
+                                    className="
+        w-full
+        px-3.5
+        py-2.5
+        rounded-xl
+        border
+        border-stone-200
+        dark:border-stone-800
+        bg-stone-50
+        dark:bg-stone-950
+        text-sm
+        text-stone-900
+        dark:text-stone-100
+        focus:outline-none
+        focus:ring-2
+        focus:ring-pink-500/40
+        focus:border-pink-500
+        disabled:opacity-50
+    "
+                                >
+                                    <option value="">
+                                        No offer — Standard Pricing
+                                    </option>
 
-                                    <input
-                                        type="checkbox"
-                                        checked={
-                                            formData.available
-                                        }
-                                        onChange={(e) =>
-                                            setFormData(
-                                                (prev) => ({
-                                                    ...prev,
-                                                    available:
-                                                        e.target
-                                                            .checked,
-                                                })
-                                            )
-                                        }
+                                    {offersForDropdown
+                                        .filter((offer) => {
+                                            const status = getOfferStatus(offer);
+
+                                            return (
+                                                status === "ACTIVE" ||
+                                                status === "UPCOMING"
+                                            );
+                                        })
+                                        .map((offer) => {
+                                            const status = getOfferStatus(offer);
+
+                                            return (
+                                                <option
+                                                    key={offer._id}
+                                                    value={offer._id}
+                                                >
+                                                    {offer.title} —{" "}
+                                                    {formatOfferValue(offer)}{" "}
+                                                    ({status})
+                                                </option>
+                                            );
+                                        })}
+                                </select>
+
+                                {/* SELECTED OFFER PREVIEW */}
+
+                                {selectedOffer && (
+                                    <div
                                         className="
-                                            w-4 h-4
-                                            rounded
-                                            text-pink-600
-                                            focus:ring-pink-500
+                                            mt-3
+                                            rounded-2xl
+                                            border
+                                            border-stone-200
+                                            dark:border-stone-800
+                                            overflow-hidden
+                                            bg-stone-50
+                                            dark:bg-stone-950
                                         "
-                                    />
+                                    >
+                                        {(() => {
+                                            const status =
+                                                getOfferStatus(
+                                                    selectedOffer
+                                                );
 
-                                    <span className="
-                                        text-xs
-                                        font-semibold
-                                        text-stone-700
-                                        dark:text-stone-300
-                                    ">
-                                        Available
-                                    </span>
-                                </label>
+                                            const config =
+                                                getOfferStatusConfig(
+                                                    status
+                                                );
+
+                                            const StatusIcon =
+                                                config.icon;
+
+                                            return (
+                                                <>
+                                                    {/* OFFER HEADER */}
+
+                                                    <div
+                                                        className="
+                                                            p-4
+                                                            flex
+                                                            items-start
+                                                            justify-between
+                                                            gap-3
+                                                        "
+                                                    >
+                                                        <div className="flex items-start gap-3 min-w-0">
+                                                            <div
+                                                                className="
+                                                                    w-9
+                                                                    h-9
+                                                                    rounded-xl
+                                                                    bg-white
+                                                                    dark:bg-stone-900
+                                                                    border
+                                                                    border-stone-200
+                                                                    dark:border-stone-800
+                                                                    flex
+                                                                    items-center
+                                                                    justify-center
+                                                                    text-pink-600
+                                                                    dark:text-pink-400
+                                                                    shrink-0
+                                                                "
+                                                            >
+                                                                <Tag className="w-4 h-4" />
+                                                            </div>
+
+                                                            <div className="min-w-0">
+                                                                <p
+                                                                    className="
+                                                                        text-sm
+                                                                        font-semibold
+                                                                        text-stone-900
+                                                                        dark:text-stone-100
+                                                                        truncate
+                                                                    "
+                                                                >
+                                                                    {
+                                                                        selectedOffer.title
+                                                                    }
+                                                                </p>
+
+                                                                <p
+                                                                    className="
+                                                                        text-xs
+                                                                        font-semibold
+                                                                        text-pink-600
+                                                                        dark:text-pink-400
+                                                                        mt-0.5
+                                                                    "
+                                                                >
+                                                                    {
+                                                                        formatOfferValue(
+                                                                            selectedOffer
+                                                                        )
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <span
+                                                            className={`
+                                                                inline-flex
+                                                                items-center
+                                                                gap-1.5
+                                                                shrink-0
+                                                                px-2.5
+                                                                py-1.5
+                                                                rounded-full
+                                                                border
+                                                                text-[9px]
+                                                                font-bold
+                                                                ${config.badgeClass}
+                                                            `}
+                                                        >
+                                                            <StatusIcon className="w-3 h-3" />
+                                                            {
+                                                                status
+                                                            }
+                                                        </span>
+                                                    </div>
+
+                                                    {/* OFFER DATES */}
+
+                                                    <div
+                                                        className="
+                                                            border-t
+                                                            border-stone-200
+                                                            dark:border-stone-800
+                                                            px-4
+                                                            py-3
+                                                            space-y-2
+                                                        "
+                                                    >
+                                                        <div
+                                                            className="
+                                                                flex
+                                                                items-center
+                                                                gap-2
+                                                                text-[10px]
+                                                                text-stone-500
+                                                                dark:text-stone-400
+                                                            "
+                                                        >
+                                                            <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+
+                                                            <span>
+                                                                {
+                                                                    formatOfferDate(
+                                                                        selectedOffer.startDate
+                                                                    )
+                                                                }
+                                                            </span>
+
+                                                            <span>
+                                                                →
+                                                            </span>
+
+                                                            <span>
+                                                                {
+                                                                    formatOfferDate(
+                                                                        selectedOffer.endDate
+                                                                    )
+                                                                }
+                                                            </span>
+                                                        </div>
+
+                                                        {/* STATUS MESSAGE */}
+
+                                                        {status ===
+                                                            "UPCOMING" && (
+                                                                <div
+                                                                    className="
+                                                                    rounded-xl
+                                                                    bg-amber-50
+                                                                    dark:bg-amber-950/20
+                                                                    border
+                                                                    border-amber-100
+                                                                    dark:border-amber-900
+                                                                    px-3
+                                                                    py-2
+                                                                "
+                                                                >
+                                                                    <p
+                                                                        className="
+                                                                        text-[10px]
+                                                                        font-semibold
+                                                                        text-amber-700
+                                                                        dark:text-amber-400
+                                                                    "
+                                                                    >
+                                                                        This
+                                                                        offer
+                                                                        is
+                                                                        scheduled
+                                                                        and
+                                                                        can
+                                                                        be
+                                                                        attached
+                                                                        now.
+                                                                    </p>
+
+                                                                    <p
+                                                                        className="
+                                                                        text-[9px]
+                                                                        text-amber-600
+                                                                        dark:text-amber-500
+                                                                        mt-0.5
+                                                                    "
+                                                                    >
+                                                                        The
+                                                                        discount
+                                                                        should
+                                                                        apply
+                                                                        only
+                                                                        after
+                                                                        the
+                                                                        start
+                                                                        date.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                        {status ===
+                                                            "ACTIVE" && (
+                                                                <div
+                                                                    className="
+                                                                    rounded-xl
+                                                                    bg-emerald-50
+                                                                    dark:bg-emerald-950/20
+                                                                    border
+                                                                    border-emerald-100
+                                                                    dark:border-emerald-900
+                                                                    px-3
+                                                                    py-2
+                                                                "
+                                                                >
+                                                                    <p
+                                                                        className="
+                                                                        text-[10px]
+                                                                        font-semibold
+                                                                        text-emerald-700
+                                                                        dark:text-emerald-400
+                                                                    "
+                                                                    >
+                                                                        This
+                                                                        offer
+                                                                        is
+                                                                        currently
+                                                                        active.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                        {status ===
+                                                            "EXPIRED" && (
+                                                                <div
+                                                                    className="
+                                                                    rounded-xl
+                                                                    bg-stone-100
+                                                                    dark:bg-stone-900
+                                                                    border
+                                                                    border-stone-200
+                                                                    dark:border-stone-800
+                                                                    px-3
+                                                                    py-2
+                                                                "
+                                                                >
+                                                                    <p
+                                                                        className="
+                                                                        text-[10px]
+                                                                        font-semibold
+                                                                        text-stone-600
+                                                                        dark:text-stone-400
+                                                                    "
+                                                                    >
+                                                                        This
+                                                                        offer
+                                                                        has
+                                                                        expired.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+
+                                {/* NO OFFERS */}
+
+                                {offers.length ===
+                                    0 &&
+                                    !offersLoading && (
+                                        <div
+                                            className="
+                                                mt-3
+                                                p-3
+                                                rounded-xl
+                                                bg-stone-50
+                                                dark:bg-stone-950
+                                                border
+                                                border-stone-200
+                                                dark:border-stone-800
+                                            "
+                                        >
+                                            <p
+                                                className="
+                                                    text-[10px]
+                                                    text-stone-400
+                                                "
+                                            >
+                                                No
+                                                Active
+                                                offers
+                                                available.
+                                                Create an
+                                                offer first
+                                                from the
+                                                Offers page.
+                                            </p>
+                                        </div>
+                                    )}
                             </div>
 
                             {/* DESCRIPTION */}
 
-                            <div className="space-y-1">
-
-                                <label className="
-                                    block
-                                    font-semibold
-                                    text-stone-700
-                                    dark:text-stone-300
-                                ">
-                                    Description
+                            <div>
+                                <label
+                                    className="
+                                        block
+                                        text-xs
+                                        font-semibold
+                                        text-stone-700
+                                        dark:text-stone-300
+                                        mb-1.5
+                                    "
+                                >
+                                    Description *
                                 </label>
 
                                 <textarea
@@ -1420,40 +3028,39 @@ export default function MenuList() {
                                     }
                                     onChange={(e) =>
                                         setFormData(
-                                            (prev) => ({
-                                                ...prev,
+                                            {
+                                                ...formData,
                                                 description:
-                                                    e.target
+                                                    e
+                                                        .target
                                                         .value,
-                                            })
+                                            }
                                         )
                                     }
-                                    placeholder="Delicious Vanilla Cake with rich cream..."
-                                    className={`
+                                    placeholder="Write a brief description..."
+                                    className="
                                         w-full
-                                        px-4 py-3
-                                        rounded-2xl
+                                        px-3.5
+                                        py-2.5
+                                        rounded-xl
                                         border
-                                        bg-stone-50/50
+                                        border-stone-200
+                                        dark:border-stone-800
+                                        bg-stone-50
                                         dark:bg-stone-950
+                                        text-sm
                                         text-stone-900
                                         dark:text-stone-100
+                                        resize-none
                                         focus:outline-none
                                         focus:ring-2
-
-                                        ${errors.description
-                                            ? "border-rose-500 focus:ring-rose-500"
-                                            : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-                                        }
-                                    `}
+                                        focus:ring-pink-500/40
+                                        focus:border-pink-500
+                                    "
                                 />
 
                                 {errors.description && (
-                                    <p className="
-                                        text-[11px]
-                                        text-rose-500
-                                        ml-3
-                                    ">
+                                    <p className="text-xs text-rose-500 mt-1.5">
                                         {
                                             errors.description
                                         }
@@ -1461,35 +3068,157 @@ export default function MenuList() {
                                 )}
                             </div>
 
-                            {/* BUTTONS */}
+                            {/* AVAILABLE */}
 
-                            <div className="
-                                flex
-                                items-center
-                                justify-end
-                                gap-3
-                                pt-4
-                                border-t
-                                border-stone-200
-                                dark:border-stone-800
-                            ">
+                            <div
+                                className="
+                                    flex
+                                    items-center
+                                    justify-between
+                                    gap-4
+                                    p-3.5
+                                    rounded-xl
+                                    bg-stone-50
+                                    dark:bg-stone-950
+                                    border
+                                    border-stone-200
+                                    dark:border-stone-800
+                                "
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className={`
+                                            w-8
+                                            h-8
+                                            rounded-lg
+                                            flex
+                                            items-center
+                                            justify-center
+                                            ${formData.available
+                                                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                                : "bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
+                                            }
+                                        `}
+                                    >
+                                        {formData.available ? (
+                                            <CheckCircle className="w-4 h-4" />
+                                        ) : (
+                                            <XCircle className="w-4 h-4" />
+                                        )}
+                                    </div>
 
+                                    <div>
+                                        <p
+                                            className="
+                                                text-xs
+                                                font-semibold
+                                                text-stone-800
+                                                dark:text-stone-200
+                                            "
+                                        >
+                                            Available for
+                                            Ordering
+                                        </p>
+
+                                        <p
+                                            className="
+                                                text-[10px]
+                                                text-stone-500
+                                                dark:text-stone-400
+                                                mt-0.5
+                                            "
+                                        >
+                                            Customers can
+                                            order this item
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={
+                                        formData.available
+                                    }
+                                    onClick={() =>
+                                        setFormData(
+                                            {
+                                                ...formData,
+                                                available:
+                                                    !formData.available,
+                                            }
+                                        )
+                                    }
+                                    className={`
+                                        relative
+                                        w-11
+                                        h-6
+                                        rounded-full
+                                        transition-colors
+                                        cursor-pointer
+                                        shrink-0
+                                        ${formData.available
+                                            ? "bg-pink-600"
+                                            : "bg-stone-300 dark:bg-stone-700"
+                                        }
+                                    `}
+                                >
+                                    <span
+                                        className={`
+                                            absolute
+                                            top-0.5
+                                            w-5
+                                            h-5
+                                            rounded-full
+                                            bg-white
+                                            shadow
+                                            transition-transform
+                                            ${formData.available
+                                                ? "translate-x-5"
+                                                : "translate-x-0.5"
+                                            }
+                                        `}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* ACTIONS */}
+
+                            <div
+                                className="
+                                    flex
+                                    items-center
+                                    justify-end
+                                    gap-3
+                                    pt-4
+                                    border-t
+                                    border-stone-200
+                                    dark:border-stone-800
+                                "
+                            >
                                 <button
                                     type="button"
                                     onClick={
                                         handleCloseFormModal
                                     }
+                                    disabled={
+                                        actionLoading
+                                    }
                                     className="
-                                        px-5 py-2.5
+                                        px-4
+                                        py-2.5
                                         rounded-full
+                                        text-xs
+                                        font-medium
                                         border
                                         border-stone-200
                                         dark:border-stone-800
-                                        font-medium
                                         text-stone-600
-                                        dark:text-stone-300
+                                        dark:text-stone-400
                                         hover:bg-stone-100
                                         dark:hover:bg-stone-800
+                                        transition-colors
+                                        disabled:opacity-50
                                     "
                                 >
                                     Cancel
@@ -1501,22 +3230,27 @@ export default function MenuList() {
                                         actionLoading
                                     }
                                     className="
-                                        px-6 py-2.5
+                                        px-5
+                                        py-2.5
                                         rounded-full
+                                        text-xs
+                                        font-semibold
                                         bg-pink-600
                                         hover:bg-pink-700
-                                        dark:bg-pink-500
-                                        dark:hover:bg-pink-600
                                         text-white
-                                        font-semibold
-                                        disabled:opacity-60
+                                        shadow-md
+                                        shadow-pink-600/20
+                                        transition-all
+                                        active:scale-95
+                                        disabled:opacity-50
+                                        disabled:cursor-not-allowed
                                     "
                                 >
                                     {actionLoading
                                         ? "Saving..."
                                         : editingItem
                                             ? "Update Item"
-                                            : "Save Item"}
+                                            : "Create Item"}
                                 </button>
                             </div>
                         </form>
@@ -1524,99 +3258,134 @@ export default function MenuList() {
                 </div>
             )}
 
-            {/* DELETE MODAL */}
+            {/* ============================================================
+                DELETE MODAL
+            ============================================================ */}
 
             {isDeleteModalOpen &&
                 itemToDelete && (
-                    <div className="
-                        fixed inset-0 z-50
-                        bg-stone-950/60
-                        backdrop-blur-sm
-                        flex items-center justify-center
-                        p-4
-                    ">
-
-                        <div className="
-                            w-full max-w-sm
-                            bg-white dark:bg-stone-900
-                            border border-stone-200
-                            dark:border-stone-800
-                            rounded-3xl
-                            p-6
-                            shadow-2xl
-                            text-center
-                            space-y-4
-                        ">
-
-                            <div className="
-                                w-12 h-12
-                                bg-rose-100
-                                dark:bg-rose-950/50
-                                text-rose-600
-                                dark:text-rose-400
-                                rounded-full
-                                flex items-center justify-center
-                                mx-auto
-                            ">
+                    <div
+                        className="
+                            fixed
+                            inset-0
+                            z-50
+                            flex
+                            items-center
+                            justify-center
+                            p-4
+                            bg-stone-950/60
+                            backdrop-blur-sm
+                            animate-in
+                            fade-in
+                            duration-200
+                        "
+                    >
+                        <div
+                            className="
+                                bg-white
+                                dark:bg-stone-900
+                                border
+                                border-stone-200
+                                dark:border-stone-800
+                                rounded-3xl
+                                p-6
+                                max-w-sm
+                                w-full
+                                text-center
+                                shadow-2xl
+                            "
+                        >
+                            <div
+                                className="
+                                    w-14
+                                    h-14
+                                    rounded-2xl
+                                    bg-rose-100
+                                    dark:bg-rose-950/50
+                                    text-rose-600
+                                    dark:text-rose-400
+                                    flex
+                                    items-center
+                                    justify-center
+                                    mx-auto
+                                    mb-4
+                                "
+                            >
                                 <AlertTriangle className="w-6 h-6" />
                             </div>
 
-                            <div>
-                                <h3 className="
+                            <h3
+                                className="
                                     font-serif
                                     font-bold
                                     text-lg
                                     text-stone-900
-                                    dark:text-stone-50
-                                ">
-                                    Confirm Delete
-                                </h3>
+                                    dark:text-stone-100
+                                "
+                            >
+                                Delete "
+                                {
+                                    itemToDelete.name
+                                }
+                                "?
+                            </h3>
 
-                                <p className="
+                            <p
+                                className="
                                     text-xs
                                     text-stone-500
                                     dark:text-stone-400
-                                    mt-1
-                                ">
-                                    Are you sure you want to
-                                    delete{" "}
-                                    <span className="
-                                        font-semibold
-                                        text-stone-800
-                                        dark:text-stone-200
-                                    ">
-                                        "{itemToDelete.name}"
-                                    </span>
-                                    ?
-                                    <br />
-                                    This action cannot be undone.
-                                </p>
-                            </div>
+                                    mt-2
+                                    leading-relaxed
+                                "
+                            >
+                                This will
+                                permanently
+                                remove this
+                                cake from
+                                your menu.
+                                This action
+                                cannot be
+                                undone.
+                            </p>
 
-                            <div className="
-                                flex items-center
-                                justify-center
-                                gap-3
-                                pt-2
-                            ">
-
+                            <div
+                                className="
+                                    flex
+                                    items-center
+                                    justify-center
+                                    gap-3
+                                    mt-6
+                                "
+                            >
                                 <button
                                     type="button"
-                                    onClick={() =>
+                                    onClick={() => {
                                         setIsDeleteModalOpen(
                                             false
-                                        )
+                                        );
+
+                                        setItemToDelete(
+                                            null
+                                        );
+                                    }}
+                                    disabled={
+                                        actionLoading
                                     }
                                     className="
-                                        w-1/2
+                                        px-4
                                         py-2.5
                                         rounded-full
+                                        text-xs
+                                        font-medium
                                         border
                                         border-stone-200
                                         dark:border-stone-800
-                                        font-medium
                                         text-stone-600
-                                        dark:text-stone-300
+                                        dark:text-stone-400
+                                        hover:bg-stone-100
+                                        dark:hover:bg-stone-800
+                                        disabled:opacity-50
                                     "
                                 >
                                     Cancel
@@ -1624,108 +3393,138 @@ export default function MenuList() {
 
                                 <button
                                     type="button"
-                                    onClick={
-                                        handleDeleteConfirm
-                                    }
                                     disabled={
                                         actionLoading
                                     }
+                                    onClick={
+                                        handleDeleteConfirm
+                                    }
                                     className="
-                                        w-1/2
+                                        px-5
                                         py-2.5
                                         rounded-full
+                                        text-xs
+                                        font-semibold
                                         bg-rose-600
                                         hover:bg-rose-700
                                         text-white
-                                        font-semibold
-                                        disabled:opacity-60
+                                        shadow-md
+                                        transition-all
+                                        disabled:opacity-50
                                     "
                                 >
                                     {actionLoading
                                         ? "Deleting..."
-                                        : "Delete"}
+                                        : "Delete Item"}
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
 
-            {/* ERROR MODAL */}
+            {/* ============================================================
+                ERROR MODAL
+            ============================================================ */}
 
             {isErrorModalOpen && (
-                <div className="
-                    fixed inset-0 z-[60]
-                    bg-stone-950/60
-                    backdrop-blur-sm
-                    flex items-center justify-center
-                    p-4
-                ">
-
-                    <div className="
-                        w-full max-w-sm
-                        bg-white dark:bg-stone-900
-                        border border-stone-200
-                        dark:border-stone-800
-                        rounded-3xl
-                        p-6
-                        shadow-2xl
-                        text-center
-                        space-y-5
-                    ">
-
-                        <div className="
-                            w-14 h-14
-                            bg-rose-100
-                            dark:bg-rose-950/50
-                            text-rose-600
-                            dark:text-rose-400
-                            rounded-full
-                            flex items-center justify-center
-                            mx-auto
-                        ">
-                            <AlertTriangle className="w-7 h-7" />
+                <div
+                    className="
+                        fixed
+                        inset-0
+                        z-[60]
+                        flex
+                        items-center
+                        justify-center
+                        p-4
+                        bg-stone-950/60
+                        backdrop-blur-sm
+                    "
+                >
+                    <div
+                        className="
+                            bg-white
+                            dark:bg-stone-900
+                            border
+                            border-stone-200
+                            dark:border-stone-800
+                            rounded-3xl
+                            p-6
+                            max-w-sm
+                            w-full
+                            text-center
+                            shadow-2xl
+                        "
+                    >
+                        <div
+                            className="
+                                w-14
+                                h-14
+                                rounded-2xl
+                                bg-rose-100
+                                dark:bg-rose-950/50
+                                text-rose-600
+                                dark:text-rose-400
+                                flex
+                                items-center
+                                justify-center
+                                mx-auto
+                                mb-4
+                            "
+                        >
+                            <AlertTriangle className="w-6 h-6" />
                         </div>
 
-                        <div>
-                            <h3 className="
+                        <h3
+                            className="
                                 font-serif
                                 font-bold
                                 text-lg
                                 text-stone-900
-                                dark:text-stone-50
-                            ">
-                                Unable to Save
-                            </h3>
+                                dark:text-stone-100
+                            "
+                        >
+                            Action Failed
+                        </h3>
 
-                            <p className="
-                                text-xs md:text-sm
-                                text-stone-500
-                                dark:text-stone-400
+                        <p
+                            className="
+                                text-xs
+                                text-rose-500
+                                dark:text-rose-400
                                 mt-2
-                            ">
-                                {serverError}
-                            </p>
-                        </div>
+                                leading-relaxed
+                            "
+                        >
+                            {
+                                serverError
+                            }
+                        </p>
 
                         <button
                             type="button"
-                            onClick={() => {
+                            onClick={() =>
                                 setIsErrorModalOpen(
                                     false
-                                );
-                                setServerError("");
-                            }}
+                                )
+                            }
                             className="
-                                w-full
+                                mt-6
+                                px-6
                                 py-2.5
                                 rounded-full
-                                bg-rose-600
-                                hover:bg-rose-700
-                                text-white
+                                text-xs
                                 font-semibold
+                                bg-stone-800
+                                hover:bg-stone-900
+                                text-white
+                                dark:bg-stone-200
+                                dark:text-stone-900
+                                dark:hover:bg-white
+                                shadow-md
+                                transition-all
                             "
                         >
-                            Okay
+                            Dismiss
                         </button>
                     </div>
                 </div>
@@ -1740,7 +3539,12 @@ export default function MenuList() {
 
 // "use client";
 
-// import React, { useState, useEffect, useCallback } from "react";
+// import React, {
+//     useState,
+//     useEffect,
+//     useCallback,
+// } from "react";
+
 // import {
 //     Search,
 //     Plus,
@@ -1751,101 +3555,148 @@ export default function MenuList() {
 //     ChevronRight,
 //     Sparkles,
 //     AlertTriangle,
-//     CheckCircle2,
-//     Image as ImageIcon,
-//     LogOut,
 // } from "lucide-react";
+
 // import axios from "axios";
-// import { useRouter } from "next/navigation";
 
 // export interface MenuItem {
 //     _id: string;
 //     name: string;
 //     flavour: string;
-//     price: number;
-//     weight: string;
 //     description: string;
 //     image: string;
 //     available: boolean;
+
+//     // These can come from your GET API if you populate/attach
+//     // the first/default variant.
+//     weight?: number;
+//     price?: number;
 // }
 
 // interface FormErrors {
 //     name?: string;
 //     flavour?: string;
-//     price?: string;
 //     weight?: string;
+//     price?: string;
 //     description?: string;
-//     image?: string;
 // }
 
+// interface FormData {
+//     name: string;
+//     flavour: string;
+//     weight: string;
+//     price: string;
+//     description: string;
+//     available: boolean;
+// }
+
+// const INITIAL_FORM_DATA: FormData = {
+//     name: "",
+//     flavour: "",
+//     weight: "",
+//     price: "",
+//     description: "",
+//     available: true,
+// };
+
 // export default function MenuList() {
-//     const router = useRouter();
+//     // --------------------------------------------------
+//     // DATA
+//     // --------------------------------------------------
 
-//     // --- Data & Pagination State ---
 //     const [items, setItems] = useState<MenuItem[]>([]);
-//     const [loading, setLoading] = useState<boolean>(true);
-//     const [search, setSearch] = useState<string>("");
-//     const [debouncedSearch, setDebouncedSearch] = useState<string>("");
-//     const [currentPage, setCurrentPage] = useState<number>(1);
-//     const [totalPages, setTotalPages] = useState<number>(1);
-//     const [totalItems, setTotalItems] = useState<number>(0);
-//     const limit = 8;
+//     const [loading, setLoading] = useState(true);
 
-//     // --- Modal States ---
-//     const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
-//     const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-//     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
-//     const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
-//     const [actionLoading, setActionLoading] = useState<boolean>(false);
-//     const [serverError, setServerError] = useState("");
-//     const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
-//     const [logoutLoading, setLogoutLoading] = useState(false);
+//     const [search, setSearch] = useState("");
+//     const [debouncedSearch, setDebouncedSearch] =
+//         useState("");
 
-//     // --- Form State & Validation ---
-//     const [formData, setFormData] = useState({
-//         name: "",
-//         flavour: "",
-//         price: "",
-//         weight: "1 Kg",
-//         description: "",
-//         available: true,
-//     });
-//     const [errors, setErrors] = useState<FormErrors>({});
+//     const [currentPage, setCurrentPage] = useState(1);
+//     const [totalPages, setTotalPages] = useState(1);
+//     const [totalItems, setTotalItems] = useState(0);
 
-//     // Debounce search query to reduce server hits
+//     const limit = 5;
+
+//     // --------------------------------------------------
+//     // FORM
+//     // --------------------------------------------------
+
+//     const [isFormModalOpen, setIsFormModalOpen] =
+//         useState(false);
+
+//     const [editingItem, setEditingItem] =
+//         useState<MenuItem | null>(null);
+
+//     const [formData, setFormData] =
+//         useState<FormData>(INITIAL_FORM_DATA);
+
+//     const [errors, setErrors] =
+//         useState<FormErrors>({});
+
+//     // --------------------------------------------------
+//     // DELETE
+//     // --------------------------------------------------
+
+//     const [isDeleteModalOpen, setIsDeleteModalOpen] =
+//         useState(false);
+
+//     const [itemToDelete, setItemToDelete] =
+//         useState<MenuItem | null>(null);
+
+//     // --------------------------------------------------
+//     // ACTION
+//     // --------------------------------------------------
+
+//     const [actionLoading, setActionLoading] =
+//         useState(false);
+
+//     const [serverError, setServerError] =
+//         useState("");
+
+//     const [isErrorModalOpen, setIsErrorModalOpen] =
+//         useState(false);
+
+//     // --------------------------------------------------
+//     // SEARCH DEBOUNCE
+//     // --------------------------------------------------
+
 //     useEffect(() => {
 //         const timer = setTimeout(() => {
-//             setDebouncedSearch(search);
+//             setDebouncedSearch(search.trim());
 //             setCurrentPage(1);
 //         }, 400);
+
 //         return () => clearTimeout(timer);
 //     }, [search]);
 
+//     // --------------------------------------------------
+//     // AUTHENTICATION
+//     // --------------------------------------------------
 
-//     // To check admin logedIn or not
 //     useEffect(() => {
-
 //         const checkAuthentication = async () => {
 //             try {
-//                 const response = await fetch("/api/admin", {
-//                     method: "GET",
-//                     credentials: "include",
-//                     cache: "no-store",
-//                 });
+//                 const response = await fetch(
+//                     "/api/admin",
+//                     {
+//                         method: "GET",
+//                         credentials: "include",
+//                         cache: "no-store",
+//                     }
+//                 );
 
 //                 const data = await response.json();
 
-//                 console.log("AUTH:", data);
-
-//                 // NOT authenticated
-//                 if (!response.ok || !data.authenticated) {
+//                 if (
+//                     !response.ok ||
+//                     !data.authenticated
+//                 ) {
 //                     window.location.replace(
 //                         "/admin-panel/login"
 //                     );
 //                 }
-
 //             } catch (error) {
-//                 console.error(
+//                 console.info(
 //                     "Authentication check failed:",
 //                     error
 //                 );
@@ -1856,24 +3707,16 @@ export default function MenuList() {
 //             }
 //         };
 
-
-//         // Normal page load
 //         checkAuthentication();
 
-
-//         // Browser Back / Forward
 //         const handlePageShow = () => {
-//             console.log("pageshow → checking authentication");
-
 //             checkAuthentication();
 //         };
-
 
 //         window.addEventListener(
 //             "pageshow",
 //             handlePageShow
 //         );
-
 
 //         return () => {
 //             window.removeEventListener(
@@ -1881,28 +3724,45 @@ export default function MenuList() {
 //                 handlePageShow
 //             );
 //         };
-
 //     }, []);
 
+//     // --------------------------------------------------
+//     // FETCH MENU
+//     // --------------------------------------------------
 
-//     // Fetch menu data from server
 //     const fetchMenu = useCallback(async () => {
 //         setLoading(true);
+
 //         try {
-//             const response = await axios.get("/api/admin/menu", {
-//                 params: {
-//                     page: currentPage,
-//                     limit,
-//                     search: debouncedSearch.trim(),
-//                 },
-//             });
+//             const response = await axios.get(
+//                 "/api/admin/menu",
+//                 {
+//                     params: {
+//                         page: currentPage,
+//                         limit,
+//                         search: debouncedSearch,
+//                     },
+//                 }
+//             );
+
 //             if (response.data.success) {
 //                 setItems(response.data.data);
-//                 setTotalPages(response.data.pagination.totalPages || 1);
-//                 setTotalItems(response.data.pagination.totalItems || 0);
+
+//                 setTotalPages(
+//                     response.data.pagination
+//                         ?.totalPages || 1
+//                 );
+
+//                 setTotalItems(
+//                     response.data.pagination
+//                         ?.totalItems || 0
+//                 );
 //             }
-//         } catch (err) {
-//             // console.error("Failed to fetch menu items:", err);
+//         } catch (error) {
+//             console.info(
+//                 "Failed to fetch menu:",
+//                 error
+//             );
 //         } finally {
 //             setLoading(false);
 //         }
@@ -1912,358 +3772,371 @@ export default function MenuList() {
 //         fetchMenu();
 //     }, [fetchMenu]);
 
-//     // Form Field Validation
-//     // const validateForm = () => {
-//     //     const newErrors: FormErrors = {};
-//     //     if (!formData.name.trim()) newErrors.name = "item name is required";
-//     //     if (!formData.flavour.trim()) newErrors.flavour = "flavour is required";
-//     //     if (!formData.price || Number(formData.price) <= 0)
-//     //         newErrors.price = "valid price is required";
-//     //     if (!formData.weight.trim()) newErrors.weight = "weight is required";
-//     //     if (!formData.description.trim())
-//     //         newErrors.description = "description is required";
-
-//     //     setErrors(newErrors);
-//     //     return Object.keys(newErrors).length === 0;
-//     // };
+//     // --------------------------------------------------
+//     // FORM VALIDATION
+//     // --------------------------------------------------
 
 //     const validateForm = () => {
 //         const newErrors: FormErrors = {};
 
+//         // NAME
 //         if (!formData.name.trim()) {
-//             newErrors.name = "Item name is required";
+//             newErrors.name =
+//                 "Menu name is required";
 //         }
 
+//         // FLAVOUR
 //         if (!formData.flavour.trim()) {
-//             newErrors.flavour = "Flavour is required";
+//             newErrors.flavour =
+//                 "Flavour is required";
 //         }
 
-//         if (!formData.price || Number(formData.price) <= 0) {
-//             newErrors.price = "Enter a valid price greater than ₹0";
+//         // WEIGHT
+//         if (!editingItem) {
+//             if (!formData.weight.trim()) {
+//                 newErrors.weight =
+//                     "Weight is required";
+//             } else {
+//                 const weight = Number(
+//                     formData.weight
+//                 );
+
+//                 if (!Number.isFinite(weight)) {
+//                     newErrors.weight =
+//                         "Weight must be a valid number";
+//                 } else if (weight < 0.5) {
+//                     newErrors.weight =
+//                         "Minimum cake weight is 0.5 Kg";
+//                 } else if (
+//                     Math.round(weight * 10) / 10 !==
+//                     weight
+//                 ) {
+//                     newErrors.weight =
+//                         "Weight must be in 0.1 Kg increments";
+//                 }
+//             }
+
+//             // PRICE
+//             if (!formData.price.trim()) {
+//                 newErrors.price =
+//                     "Price is required";
+//             } else {
+//                 const price = Number(
+//                     formData.price
+//                 );
+
+//                 if (!Number.isFinite(price)) {
+//                     newErrors.price =
+//                         "Price must be a valid number";
+//                 } else if (price <= 0) {
+//                     newErrors.price =
+//                         "Price must be greater than ₹0";
+//                 }
+//             }
 //         }
 
-//         // Weight validation
-//         const weightValue = Number(formData.weight.replace(" Kg", "").trim());
-
-//         if (!formData.weight.trim()) {
-//             newErrors.weight = "Weight is required";
-//         } else if (!Number.isFinite(weightValue)) {
-//             newErrors.weight = "Enter a valid weight";
-//         } else if (weightValue < 0.5) {
-//             newErrors.weight = "Minimum cake weight is 0.5 Kg";
-//         } else if (Math.round(weightValue * 10) / 10 !== weightValue) {
-//             newErrors.weight = "Weight must be in 0.1 Kg increments";
-//         }
-
+//         // DESCRIPTION
 //         if (!formData.description.trim()) {
-//             newErrors.description = "Description is required";
+//             newErrors.description =
+//                 "Description is required";
 //         }
 
 //         setErrors(newErrors);
 
-//         return Object.keys(newErrors).length === 0;
+//         return (
+//             Object.keys(newErrors).length === 0
+//         );
 //     };
 
-//     // Open modal for Create/Edit
-//     // const handleOpenFormModal = (item?: MenuItem) => {
-//     //     setErrors({});
-//     //     if (item) {
-//     //         setEditingItem(item);
-//     //         setFormData({
-//     //             name: item.name,
-//     //             flavour: item.flavour,
-//     //             price: String(item.price),
-//     //             weight: item.weight,
-//     //             description: item.description,
-//     //             available: item.available,
-//     //         });
-//     //     } else {
-//     //         setEditingItem(null);
-//     //         setFormData({
-//     //             name: "",
-//     //             flavour: "",
-//     //             price: "",
-//     //             weight: "1 Kg",
-//     //             description: "",
-//     //             available: true,
-//     //         });
-//     //     }
-//     //     setIsFormModalOpen(true);
-//     // };
+//     // --------------------------------------------------
+//     // OPEN CREATE / EDIT
+//     // --------------------------------------------------
 
-//     const handleOpenFormModal = (item?: MenuItem) => {
+//     const handleOpenFormModal = (
+//         item?: MenuItem
+//     ) => {
 //         setErrors({});
 //         setServerError("");
 //         setIsErrorModalOpen(false);
 
 //         if (item) {
+//             // EDIT MENU
 //             setEditingItem(item);
+
 //             setFormData({
 //                 name: item.name,
 //                 flavour: item.flavour,
-//                 price: String(item.price),
-//                 weight: item.weight,
-//                 description: item.description,
+//                 weight:
+//                     item.weight !== undefined
+//                         ? String(item.weight)
+//                         : "",
+//                 price:
+//                     item.price !== undefined
+//                         ? String(item.price)
+//                         : "",
+//                 description:
+//                     item.description || "",
 //                 available: item.available,
 //             });
 //         } else {
+//             // CREATE MENU + FIRST VARIANT
 //             setEditingItem(null);
+
 //             setFormData({
-//                 name: "",
-//                 flavour: "",
-//                 price: "",
-//                 weight: "1 Kg",
-//                 description: "",
-//                 available: true,
+//                 ...INITIAL_FORM_DATA,
 //             });
 //         }
 
 //         setIsFormModalOpen(true);
 //     };
 
-//     // Submit Create or Update
-//     // const handleFormSubmit = async (e: React.FormEvent) => {
-//     //     e.preventDefault();
-//     //     if (!validateForm()) return;
+//     // --------------------------------------------------
+//     // CLOSE FORM
+//     // --------------------------------------------------
 
-//     //     setActionLoading(true);
-//     //     try {
-//     //         const payload = {
-//     //             ...formData,
-//     //             price: Number(formData.price),
-//     //         };
+//     const handleCloseFormModal = () => {
+//         setIsFormModalOpen(false);
+//         setEditingItem(null);
 
-//     //         if (editingItem) {
-//     //             await axios.patch(`/api/admin/menu/${editingItem._id}`, payload);
-//     //         } else {
-//     //             await axios.post("/api/admin/menu", payload);
-//     //         }
+//         setFormData({
+//             ...INITIAL_FORM_DATA,
+//         });
 
-//     //         setIsFormModalOpen(false);
-//     //         fetchMenu();
-//     //     } catch (err: any) {
-//     //         console.error("Error saving menu item:", err);
+//         setErrors({});
+//         setServerError("");
+//     };
 
-//     //         // Extract backend error message or default to generic message
-//     //         const errorMsg =
-//     //             err.response?.data?.error ||
-//     //             "Item name already exists or invalid data provided.";
+//     // --------------------------------------------------
+//     // CREATE / UPDATE
+//     // --------------------------------------------------
 
-//     //         setServerError(errorMsg);
-
-//     //     } finally {
-//     //         setActionLoading(false);
-//     //     }
-//     // };
-
-//     const handleFormSubmit = async (e: React.FormEvent) => {
+//     const handleFormSubmit = async (
+//         e: React.FormEvent
+//     ) => {
 //         e.preventDefault();
 
-//         if (!validateForm()) return;
+//         if (!validateForm()) {
+//             return;
+//         }
 
 //         setActionLoading(true);
 //         setServerError("");
 //         setIsErrorModalOpen(false);
 
 //         try {
-//             const payload = {
-//                 ...formData,
-//                 price: Number(formData.price),
-//             };
-
 //             if (editingItem) {
+//                 // Menu update.
+//                 // Weight and price belong to Variant,
+//                 // not Menu.
+//                 const payload = {
+//                     name: formData.name.trim(),
+//                     flavour:
+//                         formData.flavour.trim(),
+//                     description:
+//                         formData.description.trim(),
+//                     available:
+//                         formData.available,
+//                 };
+
 //                 await axios.put(
 //                     `/api/admin/menu/${editingItem._id}`,
 //                     payload
 //                 );
 //             } else {
-//                 await axios.post("/api/admin/menu", payload);
+//                 // CREATE MENU + FIRST VARIANT
+//                 const payload = {
+//                     name: formData.name.trim(),
+//                     flavour:
+//                         formData.flavour.trim(),
+
+//                     weight: Number(
+//                         formData.weight
+//                     ),
+
+//                     price: Number(
+//                         formData.price
+//                     ),
+
+//                     description:
+//                         formData.description.trim(),
+
+//                     available:
+//                         formData.available,
+//                 };
+
+//                 await axios.post(
+//                     "/api/admin/menu",
+//                     payload
+//                 );
 //             }
 
-//             setIsFormModalOpen(false);
-//             setEditingItem(null);
+//             handleCloseFormModal();
 
 //             await fetchMenu();
-
-//         } catch (err: any) {
-//             // console.error("Error saving menu item:", err);
-
-//             const errorMsg =
-//                 err.response?.data?.error ||
+//         } catch (error: any) {
+//             const errorMessage =
+//                 error.response?.data?.error ||
 //                 "Failed to save menu item. Please try again.";
 
-//             setServerError(errorMsg);
+//             setServerError(errorMessage);
 //             setIsErrorModalOpen(true);
-
 //         } finally {
 //             setActionLoading(false);
 //         }
 //     };
 
-//     // Toggle Item Availability Status
-//     const handleToggleAvailability = async (item: MenuItem) => {
+//     // --------------------------------------------------
+//     // AVAILABILITY
+//     // --------------------------------------------------
+
+//     const handleToggleAvailability = async (
+//         item: MenuItem
+//     ) => {
 //         try {
-//             await axios.patch(`/api/admin/menu/${item._id}`, {
-//                 available: !item.available,
-//             });
-//             fetchMenu();
-//         } catch (err) {
-//             console.error("Failed to update availability:", err);
+//             await axios.patch(
+//                 `/api/admin/menu/${item._id}`,
+//                 {
+//                     available:
+//                         !item.available,
+//                 }
+//             );
+
+//             await fetchMenu();
+//         } catch (error) {
+//             console.info(
+//                 "Failed to update availability:",
+//                 error
+//             );
 //         }
 //     };
 
-//     // Confirm Delete
+//     // --------------------------------------------------
+//     // DELETE
+//     // --------------------------------------------------
+
 //     const handleDeleteConfirm = async () => {
-//         if (!itemToDelete) return;
+//         if (!itemToDelete) {
+//             return;
+//         }
+
 //         setActionLoading(true);
+
 //         try {
-//             await axios.delete(`/api/admin/menu/${itemToDelete._id}`);
+//             await axios.delete(
+//                 `/api/admin/menu/${itemToDelete._id}`
+//             );
+
 //             setIsDeleteModalOpen(false);
 //             setItemToDelete(null);
-//             fetchMenu();
-//         } catch (err: any) {
-//             // console.error("Failed to delete item:", err);
-//             const errorMsg =
-//                 err.response?.data?.error ||
-//                 "Failed to save menu item. Please try again.";
 
-//             setServerError(errorMsg);
+//             await fetchMenu();
+//         } catch (error: any) {
+//             const errorMessage =
+//                 error.response?.data?.error ||
+//                 "Failed to delete menu item. Please try again.";
+
+//             setServerError(errorMessage);
 //             setIsErrorModalOpen(true);
 //         } finally {
 //             setActionLoading(false);
 //         }
 //     };
 
-
-
-//     const handleLogout = async () => {
-//         if (logoutLoading) return;
-
-//         setLogoutLoading(true);
-
-//         try {
-
-//             await axios.post("/api/admin", {
-//                 state: "logout"
-//             });
-
-//             window.location.href = "/admin-panel/login";
-//         } catch (err) {
-//             console.error("Logout failed:", err);
-//         } finally {
-//             setLogoutLoading(false);
-//         }
-//     };
-
+//     // --------------------------------------------------
+//     // UI
+//     // --------------------------------------------------
+//     // <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 p-4 md:p-8 transition-colors duration-300">
 //     return (
-//         <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 p-4 md:p-8 transition-colors duration-300">
+
+
+//         <div className="min-h-screen bg-amber-50/30 dark:bg-stone-950 text-stone-800 dark:text-stone-100 pt-20 px-4 pb-4 md:pt-20 md:px-8 md:pb-8 lg:pt-8 transition-colors duration-300">
+
 //             <div className="max-w-7xl mx-auto space-y-6">
 
-//                 {/* HEADER & TOP CONTROLS */}
-//                 {/* <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
+//                 {/* HEADER */}
+
+//                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 border-b border-stone-200 dark:border-stone-800 pb-6">
+
 //                     <div>
 //                         <h1 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 dark:text-stone-50">
 //                             Menu Items
 //                         </h1>
+
 //                         <p className="text-xs md:text-sm text-stone-500 dark:text-stone-400 mt-1">
-//                             Manage bakery products, set availability, prices, and listings.
+//                             Manage bakery products, flavours,
+//                             availability, and listings.
 //                         </p>
 //                     </div>
 
 //                     <button
-//                         onClick={() => handleOpenFormModal()}
-//                         className="inline-flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 dark:bg-pink-500 dark:hover:bg-pink-600 text-white font-medium text-xs md:text-sm px-5 py-2.5 rounded-full shadow-lg transition-all active:scale-95 cursor-pointer"
+//                         type="button"
+//                         onClick={() =>
+//                             handleOpenFormModal()
+//                         }
+//                         className="
+//                             inline-flex items-center justify-center gap-2
+//                             bg-pink-600 hover:bg-pink-700
+//                             dark:bg-pink-500 dark:hover:bg-pink-600
+//                             text-white
+//                             font-medium
+//                             text-xs md:text-sm
+//                             px-5 py-2.5
+//                             rounded-full
+//                             shadow-lg
+//                             transition-all
+//                             active:scale-95
+//                             cursor-pointer
+//                         "
 //                     >
-//                         <Plus className="w-4 h-4" /> Add New Item
+//                         <Plus className="w-4 h-4" />
+//                         Add New Item
 //                     </button>
-//                 </div> */}
-
-
-//                 {/* HEADER */}
-//                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 border-b border-stone-200 dark:border-stone-800 pb-6">
-
-//                     {/* Title */}
-//                     <div>
-//                         <h1 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 dark:text-stone-50">
-//                             Menu Items
-//                         </h1>
-
-//                         <p className="text-xs md:text-sm text-stone-500 dark:text-stone-400 mt-1">
-//                             Manage bakery products, set availability, prices, and listings.
-//                         </p>
-//                     </div>
-
-//                     {/* Actions */}
-//                     <div className="flex items-center gap-2">
-
-//                         {/* Logout */}
-//                         {/* <button
-//                             type="button"
-//                             onClick={handleLogout}
-//                             disabled={logoutLoading}
-//                             className="
-//                 inline-flex items-center justify-center gap-2
-//                 px-4 py-2.5
-//                 rounded-full
-//                 border border-stone-200 dark:border-stone-800
-//                 bg-white dark:bg-stone-900
-//                 text-stone-600 dark:text-stone-300
-//                 hover:text-rose-600 dark:hover:text-rose-400
-//                 hover:border-rose-200 dark:hover:border-rose-900
-//                 hover:bg-rose-50 dark:hover:bg-rose-950/30
-//                 text-xs md:text-sm font-medium
-//                 transition-all
-//                 disabled:opacity-50
-//                 disabled:cursor-not-allowed
-//             "
-//                         >
-//                             <LogOut className="w-4 h-4" />
-
-//                             {logoutLoading ? "Logging out..." : "Logout"}
-//                         </button> */}
-
-//                         {/* Add Menu */}
-//                         <button
-//                             type="button"
-//                             onClick={() => handleOpenFormModal()}
-//                             className="
-//                 inline-flex items-center justify-center gap-2
-//                 bg-pink-600 hover:bg-pink-700
-//                 dark:bg-pink-500 dark:hover:bg-pink-600
-//                 text-white
-//                 font-medium
-//                 text-xs md:text-sm
-//                 px-5 py-2.5
-//                 rounded-full
-//                 shadow-lg
-//                 transition-all
-//                 active:scale-95
-//                 cursor-pointer
-//             "
-//                         >
-//                             <Plus className="w-4 h-4" />
-//                             Add New Item
-//                         </button>
-
-//                     </div>
 //                 </div>
 
+//                 {/* SEARCH */}
 
-//                 {/* SEARCH & FILTERS */}
 //                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 p-4 rounded-2xl shadow-sm">
+
 //                     <div className="relative w-full md:w-80">
+
 //                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+
 //                         <input
 //                             type="text"
 //                             value={search}
-//                             onChange={(e) => setSearch(e.target.value)}
+//                             onChange={(e) =>
+//                                 setSearch(
+//                                     e.target.value
+//                                 )
+//                             }
 //                             placeholder="Search cakes, flavours..."
-//                             className="w-full pl-10 pr-9 py-2 rounded-full border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-950 text-xs md:text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-pink-500 dark:focus:ring-pink-400 transition-all"
+//                             className="
+//                                 w-full
+//                                 pl-10 pr-9 py-2
+//                                 rounded-full
+//                                 border border-stone-200 dark:border-stone-800
+//                                 bg-stone-50/50 dark:bg-stone-950
+//                                 text-xs md:text-sm
+//                                 text-stone-900 dark:text-stone-100
+//                                 placeholder-stone-400
+//                                 focus:outline-none
+//                                 focus:ring-2
+//                                 focus:ring-pink-500
+//                             "
 //                         />
+
 //                         {search && (
 //                             <button
-//                                 onClick={() => setSearch("")}
-//                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+//                                 type="button"
+//                                 onClick={() =>
+//                                     setSearch("")
+//                                 }
+//                                 className="
+//                                     absolute right-3 top-1/2
+//                                     -translate-y-1/2
+//                                     text-stone-400
+//                                     hover:text-stone-600
+//                                 "
 //                             >
 //                                 <X className="w-4 h-4" />
 //                             </button>
@@ -2271,295 +4144,918 @@ export default function MenuList() {
 //                     </div>
 
 //                     <div className="text-xs text-stone-500 dark:text-stone-400">
-//                         Showing <span className="font-semibold text-stone-800 dark:text-stone-200">{items.length}</span> of <span className="font-semibold text-stone-800 dark:text-stone-200">{totalItems}</span> items
+//                         Showing{" "}
+//                         <span className="font-semibold text-stone-800 dark:text-stone-200">
+//                             {items.length}
+//                         </span>{" "}
+//                         of{" "}
+//                         <span className="font-semibold text-stone-800 dark:text-stone-200">
+//                             {totalItems}
+//                         </span>{" "}
+//                         items
 //                     </div>
 //                 </div>
 
-//                 {/* MENU ITEMS TABLE / LIST */}
+//                 {/* TABLE */}
+
 //                 <div className="bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 rounded-2xl shadow-sm overflow-hidden">
+
 //                     {loading ? (
 //                         <div className="p-12 text-center text-stone-500 dark:text-stone-400 space-y-3">
 //                             <Sparkles className="w-6 h-6 animate-spin mx-auto text-pink-500" />
-//                             <p className="text-xs md:text-sm">Fetching bakery menu...</p>
+
+//                             <p className="text-xs md:text-sm">
+//                                 Fetching bakery menu...
+//                             </p>
 //                         </div>
 //                     ) : items.length === 0 ? (
 //                         <div className="p-12 text-center text-stone-500 dark:text-stone-400 space-y-2">
-//                             <p className="font-medium text-sm">No menu items found</p>
-//                             <p className="text-xs">Try adjusting your search filter or add a new cake item.</p>
+//                             <p className="font-medium text-sm">
+//                                 No menu items found
+//                             </p>
+
+//                             <p className="text-xs">
+//                                 Try adjusting your search
+//                                 or add a new cake item.
+//                             </p>
 //                         </div>
 //                     ) : (
 //                         <div className="overflow-x-auto">
-//                             <table className="w-full text-left border-collapse">
+
+//                             <table className="w-full min-w-[750px] table-fixed text-left border-collapse">
+
+//                                 {/* FIXED COLUMN WIDTHS */}
+//                                 <colgroup>
+//                                     <col className="w-[38%]" />
+//                                     <col className="w-[20%]" />
+//                                     <col className="w-[20%]" />
+//                                     <col className="w-[22%]" />
+//                                 </colgroup>
+
 //                                 <thead>
-//                                     <tr className="border-b border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-950/50 text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400">
-//                                         <th className="p-4">Product</th>
-//                                         <th className="p-4">Flavour</th>
-//                                         <th className="p-4">Weight</th>
-//                                         <th className="p-4">Price</th>
-//                                         <th className="p-4">Status</th>
-//                                         <th className="p-4 text-right">Actions</th>
+//                                     <tr className="
+//                         border-b
+//                         border-stone-200/80
+//                         dark:border-stone-800
+//                         bg-stone-50/50
+//                         dark:bg-stone-950/50
+//                         text-[11px]
+//                         uppercase
+//                         tracking-wider
+//                         text-stone-500
+//                         dark:text-stone-400
+//                     ">
+//                                         <th className="px-4 py-4 text-left">
+//                                             Product
+//                                         </th>
+
+//                                         <th className="px-4 py-4 text-left">
+//                                             Flavour
+//                                         </th>
+
+//                                         <th className="px-4 py-4 text-left">
+//                                             Status
+//                                         </th>
+
+//                                         <th className="px-4 py-4 text-right">
+//                                             Actions
+//                                         </th>
 //                                     </tr>
 //                                 </thead>
-//                                 <tbody className="divide-y divide-stone-200/60 dark:divide-stone-800 text-xs md:text-sm">
+
+//                                 <tbody className="
+//                     divide-y
+//                     divide-stone-200/60
+//                     dark:divide-stone-800
+//                     text-xs md:text-sm
+//                 ">
+
 //                                     {items.map((item) => (
-//                                         <tr key={item._id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/40 transition-colors">
-//                                             <td className="p-4 flex items-center gap-3">
-//                                                 {/* <div className="w-12 h-12 rounded-xl bg-stone-100 dark:bg-stone-800 overflow-hidden relative flex-shrink-0 border border-stone-200/50 dark:border-stone-700">
-//                           {item.image ? (
-//                             <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-//                           ) : (
-//                             <div className="w-full h-full flex items-center justify-center text-stone-400">
-//                               <ImageIcon className="w-5 h-5" />
-//                             </div>
-//                           )}
-//                         </div> */}
-//                                                 <div>
-//                                                     <p className="font-semibold text-stone-900 dark:text-stone-100">{item.name}</p>
-//                                                     <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-1">{item.description}</p>
+//                                         <tr
+//                                             key={item._id}
+//                                             className="
+//                                 hover:bg-stone-50/50
+//                                 dark:hover:bg-stone-800/40
+//                                 transition-colors
+//                             "
+//                                         >
+
+//                                             {/* PRODUCT */}
+
+//                                             <td className="px-4 py-4 align-middle">
+//                                                 <div className="min-w-0">
+
+//                                                     <p className="
+//                                         font-semibold
+//                                         text-stone-900
+//                                         dark:text-stone-100
+//                                         truncate
+//                                     ">
+//                                                         {item.name}
+//                                                     </p>
+
+//                                                     <p className="
+//     text-[11px]
+//     text-stone-500
+//     dark:text-stone-400
+//     mt-0.5
+// ">
+//                                                         {item.description
+//                                                             ? `${item.description.slice(0, 22)}${item.description.length > 22 ? "..." : ""}`
+//                                                             : "No description"}
+//                                                     </p>
+
 //                                                 </div>
 //                                             </td>
-//                                             <td className="p-4 font-medium text-stone-700 dark:text-stone-300">{item.flavour}</td>
-//                                             <td className="p-4 text-stone-600 dark:text-stone-400">{item.weight}</td>
-//                                             <td className="p-4 font-semibold text-stone-900 dark:text-stone-50">₹{item.price}</td>
-//                                             <td className="p-4">
-//                                                 <button
-//                                                     onClick={() => handleToggleAvailability(item)}
-//                                                     className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${item.available
-//                                                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-//                                                         : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700"
-//                                                         }`}
-//                                                 >
-//                                                     <span className={`w-1.5 h-1.5 rounded-full ${item.available ? "bg-emerald-500" : "bg-stone-400"}`} />
-//                                                     {item.available ? "Available" : "not-available"}
-//                                                 </button>
+
+//                                             {/* FLAVOUR */}
+
+//                                             <td className="
+//                                 px-4 py-4
+//                                 align-middle
+//                                 font-medium
+//                                 text-stone-700
+//                                 dark:text-stone-300
+//                             ">
+//                                                 <div className="truncate">
+//                                                     {item.flavour}
+//                                                 </div>
 //                                             </td>
-//                                             <td className="p-4 text-right">
-//                                                 <div className="flex items-center justify-end gap-2">
+
+//                                             {/* STATUS */}
+
+//                                             <td className="px-4 py-4 align-middle">
+
+//                                                 <button
+//                                                     type="button"
+//                                                     onClick={() =>
+//                                                         handleToggleAvailability(item)
+//                                                     }
+//                                                     className={`
+//                                         inline-flex
+//                                         items-center
+//                                         gap-1.5
+//                                         px-3
+//                                         py-1
+//                                         rounded-full
+//                                         text-[11px]
+//                                         font-medium
+//                                         cursor-pointer
+//                                         whitespace-nowrap
+
+//                                         ${item.available
+//                                                             ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+//                                                             : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700"
+//                                                         }
+//                                     `}
+//                                                 >
+//                                                     <span
+//                                                         className={`
+//                                             w-1.5
+//                                             h-1.5
+//                                             rounded-full
+//                                             shrink-0
+
+//                                             ${item.available
+//                                                                 ? "bg-emerald-500"
+//                                                                 : "bg-stone-400"
+//                                                             }
+//                                         `}
+//                                                     />
+
+//                                                     {item.available
+//                                                         ? "Available"
+//                                                         : "Not Available"}
+//                                                 </button>
+
+//                                             </td>
+
+//                                             {/* ACTIONS */}
+
+//                                             <td className="
+//                                 px-4 py-4
+//                                 align-middle
+//                                 text-right
+//                             ">
+
+//                                                 <div className="
+//                                     flex
+//                                     items-center
+//                                     justify-end
+//                                     gap-2
+//                                 ">
+
 //                                                     <button
-//                                                         onClick={() => handleOpenFormModal(item)}
-//                                                         className="p-2 text-stone-600 dark:text-stone-300 hover:text-pink-600 dark:hover:text-pink-400 bg-stone-100 dark:bg-stone-800 hover:bg-pink-50 dark:hover:bg-pink-950/40 rounded-full transition-colors"
+//                                                         type="button"
+//                                                         onClick={() =>
+//                                                             handleOpenFormModal(item)
+//                                                         }
+//                                                         className="
+//                                             p-2
+//                                             text-stone-600
+//                                             dark:text-stone-300
+//                                             hover:text-pink-600
+//                                             dark:hover:text-pink-400
+//                                             bg-stone-100
+//                                             dark:bg-stone-800
+//                                             hover:bg-pink-50
+//                                             dark:hover:bg-pink-950/40
+//                                             rounded-full
+//                                             transition-colors
+//                                         "
 //                                                         title="Edit Item"
 //                                                     >
 //                                                         <Edit2 className="w-4 h-4" />
 //                                                     </button>
+
 //                                                     <button
+//                                                         type="button"
 //                                                         onClick={() => {
 //                                                             setItemToDelete(item);
 //                                                             setIsDeleteModalOpen(true);
 //                                                         }}
-//                                                         className="p-2 text-stone-600 dark:text-stone-300 hover:text-rose-600 dark:hover:text-rose-400 bg-stone-100 dark:bg-stone-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-full transition-colors"
+//                                                         className="
+//                                             p-2
+//                                             text-stone-600
+//                                             dark:text-stone-300
+//                                             hover:text-rose-600
+//                                             dark:hover:text-rose-400
+//                                             bg-stone-100
+//                                             dark:bg-stone-800
+//                                             hover:bg-rose-50
+//                                             dark:hover:bg-rose-950/40
+//                                             rounded-full
+//                                             transition-colors
+//                                         "
 //                                                         title="Delete Item"
 //                                                     >
 //                                                         <Trash2 className="w-4 h-4" />
 //                                                     </button>
+
 //                                                 </div>
+
 //                                             </td>
+
 //                                         </tr>
 //                                     ))}
+
 //                                 </tbody>
+
 //                             </table>
 //                         </div>
 //                     )}
 
-//                     {/* SERVER SIDE PAGINATION */}
+//                     {/* PAGINATION */}
+
 //                     {totalPages > 1 && (
-//                         <div className="p-4 border-t border-stone-200/80 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-950/50">
-//                             <span className="text-xs text-stone-500 dark:text-stone-400">
-//                                 Page <span className="font-semibold text-stone-800 dark:text-stone-200">{currentPage}</span> of {totalPages}
+//                         <div className="
+//             p-4
+//             border-t
+//             border-stone-200/80
+//             dark:border-stone-800
+//             flex
+//             items-center
+//             justify-between
+//             bg-stone-50/50
+//             dark:bg-stone-950/50
+//         ">
+
+//                             <span className="
+//                 text-xs
+//                 text-stone-500
+//                 dark:text-stone-400
+//             ">
+//                                 Page{" "}
+//                                 <span className="
+//                     font-semibold
+//                     text-stone-800
+//                     dark:text-stone-200
+//                 ">
+//                                     {currentPage}
+//                                 </span>{" "}
+//                                 of {totalPages}
 //                             </span>
+
 //                             <div className="flex items-center gap-2">
+
 //                                 <button
+//                                     type="button"
 //                                     disabled={currentPage === 1}
-//                                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-//                                     className="p-2 rounded-full border border-stone-200 dark:border-stone-800 hover:bg-white dark:hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+//                                     onClick={() =>
+//                                         setCurrentPage((prev) =>
+//                                             Math.max(prev - 1, 1)
+//                                         )
+//                                     }
+//                                     className="
+//                         p-2
+//                         rounded-full
+//                         border
+//                         border-stone-200
+//                         dark:border-stone-800
+//                         hover:bg-white
+//                         dark:hover:bg-stone-800
+//                         disabled:opacity-40
+//                         disabled:cursor-not-allowed
+//                     "
 //                                 >
 //                                     <ChevronLeft className="w-4 h-4" />
 //                                 </button>
+
 //                                 <button
+//                                     type="button"
 //                                     disabled={currentPage === totalPages}
-//                                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-//                                     className="p-2 rounded-full border border-stone-200 dark:border-stone-800 hover:bg-white dark:hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+//                                     onClick={() =>
+//                                         setCurrentPage((prev) =>
+//                                             Math.min(prev + 1, totalPages)
+//                                         )
+//                                     }
+//                                     className="
+//                         p-2
+//                         rounded-full
+//                         border
+//                         border-stone-200
+//                         dark:border-stone-800
+//                         hover:bg-white
+//                         dark:hover:bg-stone-800
+//                         disabled:opacity-40
+//                         disabled:cursor-not-allowed
+//                     "
 //                                 >
 //                                     <ChevronRight className="w-4 h-4" />
 //                                 </button>
+
 //                             </div>
 //                         </div>
 //                     )}
 //                 </div>
+
 //             </div>
 
-//             {/* CREATE / EDIT ITEM MODAL */}
+//             {/* =========================================================
+//                 CREATE / EDIT MODAL
+//             ========================================================= */}
+
 //             {isFormModalOpen && (
-//                 <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-//                     <div className="w-full max-w-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-//                         <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-4">
-//                             <h3 className="font-serif font-bold text-lg text-stone-900 dark:text-stone-50">
-//                                 {editingItem ? "Edit Menu Item" : "Create New Menu Item"}
-//                             </h3>
+//                 <div className="
+//                     fixed inset-0 z-50
+//                     bg-stone-950/60
+//                     backdrop-blur-sm
+//                     flex items-center justify-center
+//                     p-4
+//                 ">
+
+//                     <div className="
+//                         w-full max-w-lg
+//                         bg-white dark:bg-stone-900
+//                         border border-stone-200
+//                         dark:border-stone-800
+//                         rounded-3xl
+//                         p-6
+//                         shadow-2xl
+//                         space-y-5
+//                         max-h-[90vh]
+//                         overflow-y-auto
+//                     ">
+
+//                         {/* HEADER */}
+
+//                         <div className="
+//                             flex items-center justify-between
+//                             border-b
+//                             border-stone-200
+//                             dark:border-stone-800
+//                             pb-4
+//                         ">
+
+//                             <div>
+//                                 <h3 className="
+//                                     font-serif
+//                                     font-bold
+//                                     text-lg
+//                                     text-stone-900
+//                                     dark:text-stone-50
+//                                 ">
+//                                     {editingItem
+//                                         ? "Edit Menu Item"
+//                                         : "Create New Menu Item"}
+//                                 </h3>
+
+//                                 <p className="
+//                                     text-[11px]
+//                                     text-stone-500
+//                                     mt-1
+//                                 ">
+//                                     {editingItem
+//                                         ? "Update cake menu details."
+//                                         : "Add a cake and its first variant."}
+//                                 </p>
+//                             </div>
+
 //                             <button
-//                                 onClick={() => setIsFormModalOpen(false)}
-//                                 className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
+//                                 type="button"
+//                                 onClick={
+//                                     handleCloseFormModal
+//                                 }
+//                                 className="
+//                                     p-1.5
+//                                     rounded-full
+//                                     text-stone-400
+//                                     hover:text-stone-600
+//                                     dark:hover:text-stone-200
+//                                     hover:bg-stone-100
+//                                     dark:hover:bg-stone-800
+//                                 "
 //                             >
 //                                 <X className="w-5 h-5" />
 //                             </button>
 //                         </div>
 
-//                         <form onSubmit={handleFormSubmit} noValidate className="space-y-4 text-xs md:text-sm">
-//                             {/* Item Name */}
+//                         <form
+//                             onSubmit={
+//                                 handleFormSubmit
+//                             }
+//                             noValidate
+//                             className="
+//                                 space-y-4
+//                                 text-xs md:text-sm
+//                             "
+//                         >
+
+//                             {/* NAME */}
+
 //                             <div className="space-y-1">
-//                                 <label className="block font-semibold text-stone-700 dark:text-stone-300">Item Name</label>
+
+//                                 <label className="
+//                                     block
+//                                     font-semibold
+//                                     text-stone-700
+//                                     dark:text-stone-300
+//                                 ">
+//                                     Item Name
+//                                 </label>
+
 //                                 <input
 //                                     type="text"
-//                                     value={formData.name}
-//                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+//                                     value={
+//                                         formData.name
+//                                     }
+//                                     onChange={(e) =>
+//                                         setFormData(
+//                                             (prev) => ({
+//                                                 ...prev,
+//                                                 name: e.target
+//                                                     .value,
+//                                             })
+//                                         )
+//                                     }
 //                                     placeholder="Vanilla Cake"
-//                                     className={`w-full px-4 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 ${errors.name ? "border-rose-500 focus:ring-rose-500" : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-//                                         }`}
+//                                     className={`
+//                                         w-full
+//                                         px-4 py-2.5
+//                                         rounded-full
+//                                         border
+//                                         bg-stone-50/50
+//                                         dark:bg-stone-950
+//                                         text-stone-900
+//                                         dark:text-stone-100
+//                                         focus:outline-none
+//                                         focus:ring-2
+
+//                                         ${errors.name
+//                                             ? "border-rose-500 focus:ring-rose-500"
+//                                             : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
+//                                         }
+//                                     `}
 //                                 />
-//                                 {errors.name && <p className="text-[11px] text-rose-500 ml-3">{errors.name}</p>}
+
+//                                 {errors.name && (
+//                                     <p className="text-[11px] text-rose-500 ml-3">
+//                                         {
+//                                             errors.name
+//                                         }
+//                                     </p>
+//                                 )}
 //                             </div>
 
-//                             {/* Flavour & Weight */}
-//                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-//                                 <div className="space-y-1">
-//                                     <label className="block font-semibold text-stone-700 dark:text-stone-300">Flavour</label>
-//                                     <input
-//                                         type="text"
-//                                         value={formData.flavour}
-//                                         onChange={(e) => setFormData({ ...formData, flavour: e.target.value })}
-//                                         placeholder="Vanilla"
-//                                         className={`w-full px-4 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 ${errors.flavour ? "border-rose-500 focus:ring-rose-500" : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-//                                             }`}
-//                                     />
-//                                     {errors.flavour && <p className="text-[11px] text-rose-500 ml-3">{errors.flavour}</p>}
-//                                 </div>
+//                             {/* FLAVOUR */}
 
-//                                 <div className="space-y-1">
-//                                     <label className="block font-semibold text-stone-700 dark:text-stone-300">
-//                                         Weight (Kg)
-//                                     </label>
-//                                     <div className="relative">
-//                                         {/* <input
-//                                             type="number"
-//                                             min="0.1"
-//                                             step="0.1"
-//                                             value={formData.weight ? formData.weight.replace(" Kg", "") : ""}
-//                                             onChange={(e) => {
-//                                                 const val = e.target.value;
-//                                                 setFormData({
-//                                                     ...formData,
-//                                                     weight: val ? `${val} Kg` : "",
-//                                                 });
-//                                             }}
-//                                             placeholder="1"
-//                                             className={`w-full pl-4 pr-12 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 transition-all ${errors.weight
-//                                                 ? "border-rose-500 focus:ring-rose-500"
-//                                                 : "border-stone-200 dark:border-stone-800 focus:ring-pink-500 dark:focus:ring-pink-400"
-//                                                 }`}
-//                                         /> */}
-
-//                                         <input
-//                                             type="number"
-//                                             min="0.5"
-//                                             step="0.1"
-//                                             value={formData.weight ? formData.weight.replace(" Kg", "") : ""}
-//                                             onChange={(e) => {
-//                                                 const val = e.target.value;
-
-//                                                 setFormData({
-//                                                     ...formData,
-//                                                     weight: val ? `${val} Kg` : "",
-//                                                 });
-//                                             }}
-//                                             placeholder="1"
-//                                             className={`w-full pl-4 pr-12 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 transition-all ${errors.weight
-//                                                     ? "border-rose-500 focus:ring-rose-500"
-//                                                     : "border-stone-200 dark:border-stone-800 focus:ring-pink-500 dark:focus:ring-pink-400"
-//                                                 }`}
-//                                         />
-
-//                                         {/* Disabled Suffix Indicator */}
-//                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400 dark:text-stone-500 pointer-events-none select-none">
-//                                             Kg
-//                                         </span>
-//                                     </div>
-//                                     {errors.weight && (
-//                                         <p className="text-[11px] text-rose-500 dark:text-rose-400 ml-3 pt-0.5">
-//                                             {errors.weight}
-//                                         </p>
-//                                     )}
-//                                 </div>
-//                             </div>
-
-//                             {/* Price & Availability */}
-//                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-//                                 <div className="space-y-1">
-//                                     <label className="block font-semibold text-stone-700 dark:text-stone-300">Price (₹)</label>
-//                                     <input
-//                                         type="number"
-//                                         value={formData.price}
-//                                         onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-//                                         placeholder="550"
-//                                         className={`w-full px-4 py-2.5 rounded-full border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 ${errors.price ? "border-rose-500 focus:ring-rose-500" : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-//                                             }`}
-//                                     />
-//                                     {errors.price && <p className="text-[11px] text-rose-500 ml-3">{errors.price}</p>}
-//                                 </div>
-
-//                                 <div className="space-y-1 flex flex-col justify-end pb-2">
-//                                     <label className="flex items-center gap-2 cursor-pointer select-none">
-//                                         <input
-//                                             type="checkbox"
-//                                             checked={formData.available}
-//                                             onChange={(e) => setFormData({ ...formData, available: e.target.checked })}
-//                                             className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 dark:bg-stone-950 border-stone-300 dark:border-stone-800"
-//                                         />
-//                                         <span className="font-semibold text-stone-700 dark:text-stone-300">In Stock / Available</span>
-//                                     </label>
-//                                 </div>
-//                             </div>
-
-//                             {/* Image URL */}
-//                             {/* <div className="space-y-1">
-//                 <label className="block font-semibold text-stone-700 dark:text-stone-300">Image URL</label>
-//                 <input
-//                   type="text"
-//                   value={formData.image}
-//                   onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-//                   placeholder="https://example.com/vanilla-cake.jpg"
-//                   className="w-full px-4 py-2.5 rounded-full border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
-//                 />
-//               </div> */}
-
-//                             {/* Description */}
 //                             <div className="space-y-1">
-//                                 <label className="block font-semibold text-stone-700 dark:text-stone-300">Description</label>
+
+//                                 <label className="
+//                                     block
+//                                     font-semibold
+//                                     text-stone-700
+//                                     dark:text-stone-300
+//                                 ">
+//                                     Flavour
+//                                 </label>
+
+//                                 <input
+//                                     type="text"
+//                                     value={
+//                                         formData.flavour
+//                                     }
+//                                     onChange={(e) =>
+//                                         setFormData(
+//                                             (prev) => ({
+//                                                 ...prev,
+//                                                 flavour:
+//                                                     e.target
+//                                                         .value,
+//                                             })
+//                                         )
+//                                     }
+//                                     placeholder="Vanilla"
+//                                     className={`
+//                                         w-full
+//                                         px-4 py-2.5
+//                                         rounded-full
+//                                         border
+//                                         bg-stone-50/50
+//                                         dark:bg-stone-950
+//                                         text-stone-900
+//                                         dark:text-stone-100
+//                                         focus:outline-none
+//                                         focus:ring-2
+
+//                                         ${errors.flavour
+//                                             ? "border-rose-500 focus:ring-rose-500"
+//                                             : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
+//                                         }
+//                                     `}
+//                                 />
+
+//                                 {errors.flavour && (
+//                                     <p className="text-[11px] text-rose-500 ml-3">
+//                                         {
+//                                             errors.flavour
+//                                         }
+//                                     </p>
+//                                 )}
+//                             </div>
+
+//                             {/* WEIGHT + PRICE */}
+
+//                             {!editingItem && (
+//                                 <div className="
+//                                     grid
+//                                     grid-cols-1
+//                                     sm:grid-cols-2
+//                                     gap-4
+//                                 ">
+
+//                                     {/* WEIGHT */}
+
+//                                     <div className="space-y-1">
+
+//                                         <label className="
+//                                             block
+//                                             font-semibold
+//                                             text-stone-700
+//                                             dark:text-stone-300
+//                                         ">
+//                                             Weight (Kg)
+//                                         </label>
+
+//                                         <div className="relative">
+
+//                                             <input
+//                                                 type="number"
+//                                                 min="0.5"
+//                                                 step="0.1"
+//                                                 inputMode="decimal"
+//                                                 value={
+//                                                     formData.weight
+//                                                 }
+//                                                 onChange={(
+//                                                     e
+//                                                 ) =>
+//                                                     setFormData(
+//                                                         (
+//                                                             prev
+//                                                         ) => ({
+//                                                             ...prev,
+//                                                             weight: e
+//                                                                 .target
+//                                                                 .value,
+//                                                         })
+//                                                     )
+//                                                 }
+//                                                 placeholder="1"
+//                                                 className={`
+//                                                     w-full
+//                                                     pl-4
+//                                                     pr-12
+//                                                     py-2.5
+//                                                     rounded-full
+//                                                     border
+//                                                     bg-stone-50/50
+//                                                     dark:bg-stone-950
+//                                                     text-stone-900
+//                                                     dark:text-stone-100
+//                                                     focus:outline-none
+//                                                     focus:ring-2
+
+//                                                     ${errors.weight
+//                                                         ? "border-rose-500 focus:ring-rose-500"
+//                                                         : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
+//                                                     }
+//                                                 `}
+//                                             />
+
+//                                             <span className="
+//                                                 absolute
+//                                                 right-4
+//                                                 top-1/2
+//                                                 -translate-y-1/2
+//                                                 text-xs
+//                                                 font-semibold
+//                                                 text-stone-400
+//                                                 pointer-events-none
+//                                             ">
+//                                                 Kg
+//                                             </span>
+//                                         </div>
+
+//                                         <p className="
+//                                             text-[10px]
+//                                             text-stone-400
+//                                             ml-3
+//                                         ">
+//                                             Minimum 0.5 Kg
+//                                         </p>
+
+//                                         {errors.weight && (
+//                                             <p className="
+//                                                 text-[11px]
+//                                                 text-rose-500
+//                                                 ml-3
+//                                             ">
+//                                                 {
+//                                                     errors.weight
+//                                                 }
+//                                             </p>
+//                                         )}
+//                                     </div>
+
+//                                     {/* PRICE */}
+
+//                                     <div className="space-y-1">
+
+//                                         <label className="
+//                                             block
+//                                             font-semibold
+//                                             text-stone-700
+//                                             dark:text-stone-300
+//                                         ">
+//                                             Price (₹)
+//                                         </label>
+
+//                                         <input
+//                                             type="number"
+//                                             min="1"
+//                                             step="1"
+//                                             inputMode="numeric"
+//                                             value={
+//                                                 formData.price
+//                                             }
+//                                             onChange={(e) =>
+//                                                 setFormData(
+//                                                     (prev) => ({
+//                                                         ...prev,
+//                                                         price: e
+//                                                             .target
+//                                                             .value,
+//                                                     })
+//                                                 )
+//                                             }
+//                                             placeholder="550"
+//                                             className={`
+//                                                 w-full
+//                                                 px-4
+//                                                 py-2.5
+//                                                 rounded-full
+//                                                 border
+//                                                 bg-stone-50/50
+//                                                 dark:bg-stone-950
+//                                                 text-stone-900
+//                                                 dark:text-stone-100
+//                                                 focus:outline-none
+//                                                 focus:ring-2
+
+//                                                 ${errors.price
+//                                                     ? "border-rose-500 focus:ring-rose-500"
+//                                                     : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
+//                                                 }
+//                                             `}
+//                                         />
+
+//                                         {errors.price && (
+//                                             <p className="
+//                                                 text-[11px]
+//                                                 text-rose-500
+//                                                 ml-3
+//                                             ">
+//                                                 {
+//                                                     errors.price
+//                                                 }
+//                                             </p>
+//                                         )}
+//                                     </div>
+//                                 </div>
+//                             )}
+
+//                             {/* AVAILABILITY */}
+
+//                             <div className="
+//                                 flex items-center justify-between
+//                                 p-3
+//                                 rounded-2xl
+//                                 bg-stone-50
+//                                 dark:bg-stone-950
+//                                 border
+//                                 border-stone-200
+//                                 dark:border-stone-800
+//                             ">
+
+//                                 <div>
+//                                     <p className="
+//                                         text-xs
+//                                         font-semibold
+//                                         text-stone-700
+//                                         dark:text-stone-300
+//                                     ">
+//                                         Availability
+//                                     </p>
+
+//                                     <p className="
+//                                         text-[10px]
+//                                         text-stone-400
+//                                         mt-0.5
+//                                     ">
+//                                         Control whether customers
+//                                         can order this cake.
+//                                     </p>
+//                                 </div>
+
+//                                 <label className="
+//                                     flex items-center
+//                                     gap-2
+//                                     cursor-pointer
+//                                     select-none
+//                                 ">
+
+//                                     <input
+//                                         type="checkbox"
+//                                         checked={
+//                                             formData.available
+//                                         }
+//                                         onChange={(e) =>
+//                                             setFormData(
+//                                                 (prev) => ({
+//                                                     ...prev,
+//                                                     available:
+//                                                         e.target
+//                                                             .checked,
+//                                                 })
+//                                             )
+//                                         }
+//                                         className="
+//                                             w-4 h-4
+//                                             rounded
+//                                             text-pink-600
+//                                             focus:ring-pink-500
+//                                         "
+//                                     />
+
+//                                     <span className="
+//                                         text-xs
+//                                         font-semibold
+//                                         text-stone-700
+//                                         dark:text-stone-300
+//                                     ">
+//                                         Available
+//                                     </span>
+//                                 </label>
+//                             </div>
+
+//                             {/* DESCRIPTION */}
+
+//                             <div className="space-y-1">
+
+//                                 <label className="
+//                                     block
+//                                     font-semibold
+//                                     text-stone-700
+//                                     dark:text-stone-300
+//                                 ">
+//                                     Description
+//                                 </label>
+
 //                                 <textarea
 //                                     rows={3}
-//                                     value={formData.description}
-//                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+//                                     value={
+//                                         formData.description
+//                                     }
+//                                     onChange={(e) =>
+//                                         setFormData(
+//                                             (prev) => ({
+//                                                 ...prev,
+//                                                 description:
+//                                                     e.target
+//                                                         .value,
+//                                             })
+//                                         )
+//                                     }
 //                                     placeholder="Delicious Vanilla Cake with rich cream..."
-//                                     className={`w-full px-4 py-3 rounded-2xl border bg-stone-50/50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 ${errors.description ? "border-rose-500 focus:ring-rose-500" : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
-//                                         }`}
+//                                     className={`
+//                                         w-full
+//                                         px-4 py-3
+//                                         rounded-2xl
+//                                         border
+//                                         bg-stone-50/50
+//                                         dark:bg-stone-950
+//                                         text-stone-900
+//                                         dark:text-stone-100
+//                                         focus:outline-none
+//                                         focus:ring-2
+
+//                                         ${errors.description
+//                                             ? "border-rose-500 focus:ring-rose-500"
+//                                             : "border-stone-200 dark:border-stone-800 focus:ring-pink-500"
+//                                         }
+//                                     `}
 //                                 />
-//                                 {errors.description && <p className="text-[11px] text-rose-500 ml-3">{errors.description}</p>}
+
+//                                 {errors.description && (
+//                                     <p className="
+//                                         text-[11px]
+//                                         text-rose-500
+//                                         ml-3
+//                                     ">
+//                                         {
+//                                             errors.description
+//                                         }
+//                                     </p>
+//                                 )}
 //                             </div>
 
-//                             {/* Action Buttons */}
-//                             <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200 dark:border-stone-800">
+//                             {/* BUTTONS */}
+
+//                             <div className="
+//                                 flex
+//                                 items-center
+//                                 justify-end
+//                                 gap-3
+//                                 pt-4
+//                                 border-t
+//                                 border-stone-200
+//                                 dark:border-stone-800
+//                             ">
+
 //                                 <button
 //                                     type="button"
-//                                     onClick={() => setIsFormModalOpen(false)}
-//                                     className="px-5 py-2.5 rounded-full border border-stone-200 dark:border-stone-800 font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+//                                     onClick={
+//                                         handleCloseFormModal
+//                                     }
+//                                     className="
+//                                         px-5 py-2.5
+//                                         rounded-full
+//                                         border
+//                                         border-stone-200
+//                                         dark:border-stone-800
+//                                         font-medium
+//                                         text-stone-600
+//                                         dark:text-stone-300
+//                                         hover:bg-stone-100
+//                                         dark:hover:bg-stone-800
+//                                     "
 //                                 >
 //                                     Cancel
 //                                 </button>
+
 //                                 <button
 //                                     type="submit"
-//                                     disabled={actionLoading}
-//                                     className="px-6 py-2.5 rounded-full bg-pink-600 hover:bg-pink-700 dark:bg-pink-500 dark:hover:bg-pink-600 text-white font-semibold transition-all active:scale-95 disabled:opacity-60"
+//                                     disabled={
+//                                         actionLoading
+//                                     }
+//                                     className="
+//                                         px-6 py-2.5
+//                                         rounded-full
+//                                         bg-pink-600
+//                                         hover:bg-pink-700
+//                                         dark:bg-pink-500
+//                                         dark:hover:bg-pink-600
+//                                         text-white
+//                                         font-semibold
+//                                         disabled:opacity-60
+//                                     "
 //                                 >
-//                                     {actionLoading ? "Saving..." : editingItem ? "Update Item" : "Save Item"}
+//                                     {actionLoading
+//                                         ? "Saving..."
+//                                         : editingItem
+//                                             ? "Update Item"
+//                                             : "Save Item"}
 //                                 </button>
 //                             </div>
 //                         </form>
@@ -2567,76 +5063,212 @@ export default function MenuList() {
 //                 </div>
 //             )}
 
-//             {/* CONFIRM DELETE MODAL */}
-//             {isDeleteModalOpen && itemToDelete && (
-//                 <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-//                     <div className="w-full max-w-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-6 shadow-2xl text-center space-y-4">
-//                         <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto">
-//                             <AlertTriangle className="w-6 h-6" />
-//                         </div>
-//                         <div>
-//                             <h3 className="font-serif font-bold text-lg text-stone-900 dark:text-stone-50">Confirm Delete</h3>
-//                             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-//                                 Are you sure you want to delete <span className="font-semibold text-stone-800 dark:text-stone-200">"{itemToDelete.name}"</span>? This action cannot be undone.
-//                             </p>
-//                         </div>
-//                         <div className="flex items-center justify-center gap-3 pt-2">
-//                             <button
-//                                 onClick={() => setIsDeleteModalOpen(false)}
-//                                 className="w-1/2 py-2.5 rounded-full border border-stone-200 dark:border-stone-800 font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors text-xs md:text-sm"
-//                             >
-//                                 Cancel
-//                             </button>
-//                             <button
-//                                 onClick={handleDeleteConfirm}
-//                                 disabled={actionLoading}
-//                                 className="w-1/2 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-all active:scale-95 text-xs md:text-sm disabled:opacity-60"
-//                             >
-//                                 {actionLoading ? "Deleting..." : "Delete"}
-//                             </button>
+//             {/* DELETE MODAL */}
+
+//             {isDeleteModalOpen &&
+//                 itemToDelete && (
+//                     <div className="
+//                         fixed inset-0 z-50
+//                         bg-stone-950/60
+//                         backdrop-blur-sm
+//                         flex items-center justify-center
+//                         p-4
+//                     ">
+
+//                         <div className="
+//                             w-full max-w-sm
+//                             bg-white dark:bg-stone-900
+//                             border border-stone-200
+//                             dark:border-stone-800
+//                             rounded-3xl
+//                             p-6
+//                             shadow-2xl
+//                             text-center
+//                             space-y-4
+//                         ">
+
+//                             <div className="
+//                                 w-12 h-12
+//                                 bg-rose-100
+//                                 dark:bg-rose-950/50
+//                                 text-rose-600
+//                                 dark:text-rose-400
+//                                 rounded-full
+//                                 flex items-center justify-center
+//                                 mx-auto
+//                             ">
+//                                 <AlertTriangle className="w-6 h-6" />
+//                             </div>
+
+//                             <div>
+//                                 <h3 className="
+//                                     font-serif
+//                                     font-bold
+//                                     text-lg
+//                                     text-stone-900
+//                                     dark:text-stone-50
+//                                 ">
+//                                     Confirm Delete
+//                                 </h3>
+
+//                                 <p className="
+//                                     text-xs
+//                                     text-stone-500
+//                                     dark:text-stone-400
+//                                     mt-1
+//                                 ">
+//                                     Are you sure you want to
+//                                     delete{" "}
+//                                     <span className="
+//                                         font-semibold
+//                                         text-stone-800
+//                                         dark:text-stone-200
+//                                     ">
+//                                         "{itemToDelete.name}"
+//                                     </span>
+//                                     ?
+//                                     <br />
+//                                     This action cannot be undone.
+//                                 </p>
+//                             </div>
+
+//                             <div className="
+//                                 flex items-center
+//                                 justify-center
+//                                 gap-3
+//                                 pt-2
+//                             ">
+
+//                                 <button
+//                                     type="button"
+//                                     onClick={() =>
+//                                         setIsDeleteModalOpen(
+//                                             false
+//                                         )
+//                                     }
+//                                     className="
+//                                         w-1/2
+//                                         py-2.5
+//                                         rounded-full
+//                                         border
+//                                         border-stone-200
+//                                         dark:border-stone-800
+//                                         font-medium
+//                                         text-stone-600
+//                                         dark:text-stone-300
+//                                     "
+//                                 >
+//                                     Cancel
+//                                 </button>
+
+//                                 <button
+//                                     type="button"
+//                                     onClick={
+//                                         handleDeleteConfirm
+//                                     }
+//                                     disabled={
+//                                         actionLoading
+//                                     }
+//                                     className="
+//                                         w-1/2
+//                                         py-2.5
+//                                         rounded-full
+//                                         bg-rose-600
+//                                         hover:bg-rose-700
+//                                         text-white
+//                                         font-semibold
+//                                         disabled:opacity-60
+//                                     "
+//                                 >
+//                                     {actionLoading
+//                                         ? "Deleting..."
+//                                         : "Delete"}
+//                                 </button>
+//                             </div>
 //                         </div>
 //                     </div>
-//                 </div>
-//             )}
+//                 )}
 
+//             {/* ERROR MODAL */}
 
-//             {/* SERVER ERROR MODAL */}
 //             {isErrorModalOpen && (
-//                 <div className="fixed inset-0 z-[60] bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-//                     <div className="w-full max-w-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-6 shadow-2xl text-center space-y-5">
+//                 <div className="
+//                     fixed inset-0 z-[60]
+//                     bg-stone-950/60
+//                     backdrop-blur-sm
+//                     flex items-center justify-center
+//                     p-4
+//                 ">
 
-//                         {/* Error Icon */}
-//                         <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto">
+//                     <div className="
+//                         w-full max-w-sm
+//                         bg-white dark:bg-stone-900
+//                         border border-stone-200
+//                         dark:border-stone-800
+//                         rounded-3xl
+//                         p-6
+//                         shadow-2xl
+//                         text-center
+//                         space-y-5
+//                     ">
+
+//                         <div className="
+//                             w-14 h-14
+//                             bg-rose-100
+//                             dark:bg-rose-950/50
+//                             text-rose-600
+//                             dark:text-rose-400
+//                             rounded-full
+//                             flex items-center justify-center
+//                             mx-auto
+//                         ">
 //                             <AlertTriangle className="w-7 h-7" />
 //                         </div>
 
-//                         {/* Error Content */}
 //                         <div>
-//                             <h3 className="font-serif font-bold text-lg text-stone-900 dark:text-stone-50">
+//                             <h3 className="
+//                                 font-serif
+//                                 font-bold
+//                                 text-lg
+//                                 text-stone-900
+//                                 dark:text-stone-50
+//                             ">
 //                                 Unable to Save
 //                             </h3>
 
-//                             <p className="text-xs md:text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
+//                             <p className="
+//                                 text-xs md:text-sm
+//                                 text-stone-500
+//                                 dark:text-stone-400
+//                                 mt-2
+//                             ">
 //                                 {serverError}
 //                             </p>
 //                         </div>
 
-//                         {/* Button */}
 //                         <button
 //                             type="button"
 //                             onClick={() => {
-//                                 setIsErrorModalOpen(false);
+//                                 setIsErrorModalOpen(
+//                                     false
+//                                 );
 //                                 setServerError("");
 //                             }}
-//                             className="w-full py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-all active:scale-95 text-xs md:text-sm"
+//                             className="
+//                                 w-full
+//                                 py-2.5
+//                                 rounded-full
+//                                 bg-rose-600
+//                                 hover:bg-rose-700
+//                                 text-white
+//                                 font-semibold
+//                             "
 //                         >
 //                             Okay
 //                         </button>
 //                     </div>
 //                 </div>
 //             )}
-
-
 //         </div>
 //     );
 // }

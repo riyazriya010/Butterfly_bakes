@@ -39,11 +39,13 @@ export async function getMenuWithVariants(
 
 export async function checkMenuAvailability(
   cakeId: string,
-  variantId: string
+  variantId: string,
+  isOffer: boolean
 ) {
   return await menuRepo.checkMenuAvailability(
     cakeId,
-    variantId
+    variantId,
+    isOffer
   );
 }
 
@@ -59,4 +61,16 @@ export async function getSingleCakeDetails(id: string) {
   await connectDB();
 
   return await menuRepo.singleCakeDetails(id)
+}
+
+
+
+
+// ----------------------------------------------- OFFER ------------------
+
+//CHECK ADN EXPIRE OFFERS
+export async function checkAndUpdateeOfferService() {
+  connectDB();
+
+  return await menuRepo.checkAndUpdateeOffer()
 }

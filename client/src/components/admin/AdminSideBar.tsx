@@ -8,6 +8,7 @@ import {
     X,
     CakeSlice,
     Layers3,
+    Tags,
     LogOut,
 } from "lucide-react";
 import axios from "axios";
@@ -28,6 +29,11 @@ const navItems: NavItem[] = [
         label: "Variants",
         href: "/admin-panel/variants",
         icon: Layers3,
+    },
+    {
+        label: "Offer Lists",
+        href: "/admin-panel/offer",
+        icon: Tags,
     },
 ];
 
@@ -138,29 +144,30 @@ export default function AdminSidebar() {
 
             {/* ================= SIDEBAR ================= */}
             <aside
-                className={`
-    fixed
-    left-0
-    top-0
-    z-50
-    h-[100dvh]
-    w-[250px]
-    bg-white
-    dark:bg-stone-900
-    border-r
-    border-stone-200
-    dark:border-stone-800
-    shadow-xl
-    flex
-    flex-col
-    transition-transform
-    duration-300
-    ease-out
-    lg:translate-x-0
+    className={`
+        fixed
+        left-0
+        top-0
+        z-50
+        h-[100dvh]
+        w-[250px]
+        bg-white
+        dark:bg-stone-900
+        border-r
+        border-stone-200
+        dark:border-stone-800
+        shadow-xl
+        flex
+        flex-col
+        overflow-y-auto
+        transition-transform
+        duration-300
+        ease-out
+        lg:translate-x-0
 
-    ${isOpen ? "translate-x-0" : "-translate-x-full"}
-  `}
-            >
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+    `}
+>
                 {/* ================= HEADER ================= */}
                 <div
                     className="
@@ -363,15 +370,16 @@ export default function AdminSidebar() {
                 {/* ================= FOOTER ================= */}
                 {/* ================= FOOTER ================= */}
                 <div
-                    className="
-    px-3
-    pt-3
-    pb-[calc(0.75rem+env(safe-area-inset-bottom))]
-    border-t
-    border-stone-200
-    dark:border-stone-800
-  "
-                >
+    className="
+        px-3
+        pt-3
+        pb-[calc(1.5rem+env(safe-area-inset-bottom))]
+        border-t
+        border-stone-200
+        dark:border-stone-800
+        shrink-0
+    "
+>
                     <button
                         type="button"
                         onClick={handleLogout}

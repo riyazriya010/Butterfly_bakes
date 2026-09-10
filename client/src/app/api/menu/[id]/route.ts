@@ -8,6 +8,8 @@ type RouteParams = {
   }>;
 };
 
+
+
 export async function GET(
   request: NextRequest,
   { params }: RouteParams
@@ -37,6 +39,13 @@ export async function GET(
 
     const variantId =
       request.nextUrl.searchParams.get("variantId");
+
+      const isOfferParam =
+      request.nextUrl.searchParams.get("isOffer")
+
+      const isOffer = isOfferParam === "true";
+
+      console.log('isOffer', isOffer)
 
     if (!variantId) {
       return NextResponse.json(
@@ -68,8 +77,9 @@ export async function GET(
 
     const result = await checkMenuAvailability(
       id,
-      variantId
-    );
+      variantId,
+      isOffer
+    )as any
 
     // --------------------------------
     // Cake / menu item not found
@@ -118,6 +128,32 @@ export async function GET(
         { status: 409 }
       );
     }
+
+    // --------------------------------
+    // OFFER APPLIED BUT OFFER NOT AVAILABLE
+    // --------------------------------
+
+    const offer = result.cake.offer;
+
+    if(isOffer) {
+      const isOfferValid =
+  offer &&
+  typeof offer === "object" &&
+  Object.keys(offer).length > 0;
+
+    if (!isOfferValid) {
+      return NextResponse.json(
+        {
+          success: false,
+          available: false,
+          error: "The offer is closed",
+          reason: "OFFER_CLOSED",
+        },
+        { status: 400 }
+      );
+    }
+    }
+
 
     // --------------------------------
     // Everything available

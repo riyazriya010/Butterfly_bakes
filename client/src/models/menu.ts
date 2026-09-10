@@ -1,10 +1,11 @@
-import { Schema, model, models, Model } from "mongoose";
+import { Schema, model, models, Model, Types } from "mongoose";
 
 export interface IMenu {
   name: string;
   flavour: string;
   description?: string;
   available: boolean;
+  offerId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +33,12 @@ const MenuSchema = new Schema<IMenu>(
     available: {
       type: Boolean,
       default: true,
+    },
+
+    offerId: {
+      type: Schema.Types.ObjectId,
+      ref: "Offer",
+      index: true,
     },
   },
   {

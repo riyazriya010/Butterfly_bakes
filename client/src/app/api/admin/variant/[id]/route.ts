@@ -198,6 +198,34 @@ export async function PUT(
             );
         }
 
+
+                if (
+            error.message === "PRICE_MUST_GREATER_THAN_SMALLER_WEIGHT"
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error:
+                        "Price must be greater than the smaller weight variant",
+                },
+                { status: 400 }
+            );
+        }
+
+
+        if (
+            error.message === "PRICE_MUST_LESS_THAN_LARGER_WEIGHT"
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error:
+                        "Price must be less than the larger weight variant",
+                },
+                { status: 400 }
+            );
+        }
+
         console.error("Error updating cake variant:", error);
 
         return NextResponse.json(

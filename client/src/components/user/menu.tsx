@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Footer } from "../ui/Footer";
+import { PeekingChefDoll } from "./PeekingChefDoll";
 
 const ITEMS_PER_PAGE = 6;
 
@@ -106,6 +107,13 @@ export default function Menu() {
   const debouncedPriceRange = useDebounce(priceRange, 500);
 
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+
+
+  // DOLL IMAGE
+    const [dollPosition, setDollPosition] = useState<{
+  cardIndex: number;
+  side: "left" | "right";
+} | null>(null);
 
   /*
    * =========================
@@ -394,6 +402,38 @@ export default function Menu() {
       start + ITEMS_PER_PAGE
     );
   }, [filteredItems, currentPage]);
+
+
+
+   // DOLL IMAGE
+   useEffect(() => {
+  if (paginatedItems.length === 0) {
+    setDollPosition(null);
+    return;
+  }
+
+  const moveDoll = () => {
+    const randomCardIndex = Math.floor(
+      Math.random() * paginatedItems.length
+    );
+
+    const randomSide: "left" | "right" =
+      Math.random() < 0.5 ? "left" : "right";
+
+    setDollPosition({
+      cardIndex: randomCardIndex,
+      side: randomSide,
+    });
+  };
+
+  // Show the doll immediately
+  moveDoll();
+
+  // Move it every 4 seconds
+  const interval = setInterval(moveDoll, 4000);
+
+  return () => clearInterval(interval);
+}, [paginatedItems]);
 
   /*
    * =========================
@@ -965,16 +1005,36 @@ export default function Menu() {
             {/* Cards */}
             {!loading && !error && (
               <>
-                {paginatedItems.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {paginatedItems.map((cake) => (
-                      <CakeCard
-                        key={cake._id}
-                        cake={cake}
-                      />
-                    ))}
-                  </div>
-                ) : (
+                {paginatedItems.length > 0 ? 
+                // (
+                //   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                //     {paginatedItems.map((cake) => (
+                //       <CakeCard
+                //         key={cake._id}
+                //         cake={cake}
+                //       />
+                //     ))}
+                //   </div>
+                // )
+                (
+  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+    {paginatedItems.map((cake, index) => (
+      <div
+        key={cake._id}
+        className="relative"
+      >
+        {dollPosition?.cardIndex === index && (
+          <PeekingChefDoll
+            side={dollPosition.side}
+          />
+        )}
+
+        <CakeCard cake={cake} />
+      </div>
+    ))}
+  </div>
+)
+                 : (
                   <div className="py-24 px-6 text-center bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800">
                     <Sparkles className="w-8 h-8 mx-auto text-stone-300" />
 
