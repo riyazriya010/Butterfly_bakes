@@ -117,7 +117,15 @@ export class MenuRepository {
 
         totalVariantCount: menuVariants.length,
       };
-    });
+    })
+    // LOW → HIGH
+  .sort((a, b) => {
+    if (a.minPrice === null) return 1;
+    if (b.minPrice === null) return -1;
+
+    return a.minPrice - b.minPrice;
+  });
+
 
     return {
       items,
