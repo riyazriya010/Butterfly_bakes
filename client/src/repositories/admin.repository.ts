@@ -861,38 +861,98 @@ export class AdminRepository {
     //--------------------------
 
     // CREATE RECIPE
+    // async createRecipe(data: CreateRecipeData) {
+    //     const gridFsId = new ObjectId();
+
+    //     await uploadRecipeBuffer(
+    //         data.buffer,
+    //         data.fileName,
+    //         gridFsId
+    //     );
+
+    //     try {
+    //         return await Recipe.create({
+    //             title: data.title,
+    //             description: data.description,
+    //             fileName: data.fileName,
+    //             contentType: "application/pdf",
+    //             gridFsId,
+    //             fileSize: data.fileSize,
+    //         });
+    //     } catch (error) {
+    //         // Remove the uploaded file if metadata creation fails.
+    //         try {
+    //             await getRecipeBucket().delete(gridFsId);
+    //         } catch (cleanupError) {
+    //             console.error(
+    //                 "Failed to clean up GridFS upload:",
+    //                 cleanupError
+    //             );
+    //         }
+
+    //         throw error;
+    //     }
+    // }
+
+
     async createRecipe(data: CreateRecipeData) {
-        const gridFsId = new ObjectId();
-
-        await uploadRecipeBuffer(
-            data.buffer,
-            data.fileName,
-            gridFsId
-        );
-
-        try {
-            return await Recipe.create({
-                title: data.title,
-                description: data.description,
+    // Check if title or PDF file name already exists
+    const existingRecipe = await Recipe.findOne({
+        $or: [
+            {
+                title: {
+                    $regex: `^${data.title.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+                    $options: "i",
+                },
+            },
+            {
                 fileName: data.fileName,
-                contentType: "application/pdf",
-                gridFsId,
-                fileSize: data.fileSize,
-            });
-        } catch (error) {
-            // Remove the uploaded file if metadata creation fails.
-            try {
-                await getRecipeBucket().delete(gridFsId);
-            } catch (cleanupError) {
-                console.error(
-                    "Failed to clean up GridFS upload:",
-                    cleanupError
-                );
-            }
+            },
+        ],
+    });
 
-            throw error;
+    if (existingRecipe) {
+        if (
+            existingRecipe.title.toLowerCase() ===
+            data.title.trim().toLowerCase()
+        ) {
+            throw new Error("RECIPE_TITLE_ALREADY_EXISTS");
         }
+        throw new Error("THIS_RECIPE_PDF_FILE_NAME_ALREADY_EXISTS");
     }
+
+    const gridFsId = new ObjectId();
+
+    await uploadRecipeBuffer(
+        data.buffer,
+        data.fileName,
+        gridFsId
+    );
+
+    try {
+        return await Recipe.create({
+            title: data.title.trim(),
+            description: data.description,
+            fileName: data.fileName,
+            contentType: "application/pdf",
+            gridFsId,
+            fileSize: data.fileSize,
+        });
+    } catch (error) {
+        // Remove uploaded PDF if metadata creation fails
+        try {
+            await getRecipeBucket().delete(gridFsId);
+        } catch (cleanupError) {
+            console.error(
+                "Failed to clean up GridFS upload:",
+                cleanupError
+            );
+        }
+
+        throw error;
+    }
+}
+
 
     // GET RECIPE LIST WITH SEARCH AND PAGINATION
     async getRecipeLists({

@@ -187,7 +187,40 @@ export async function POST(request: NextRequest) {
             },
             { status: 201 }
         );
-    } catch (error: unknown) {
+    } catch (error: any) {
+        console.log('errorrrr', error)
+
+        if (
+            error?.message ===
+            "RECIPE_TITLE_ALREADY_EXISTS"
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error:
+                        "Recipe title already exists",
+                },
+                { status: 409 }
+            );
+        }
+
+
+        if (
+            error?.message ===
+            "THIS_RECIPE_PDF_FILE_NAME_ALREADY_EXISTS"
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error:
+                        "This recipe PDF file with same name already exists.",
+                },
+                { status: 409 }
+            );
+        }
+        console.log('crossed')
+
+
         const code =
             error instanceof Error ? error.message : "";
 
