@@ -466,7 +466,7 @@ export default function RecipesPdf() {
 
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button
+                                                    {/* <button
                                                         type="button"
                                                         onClick={() =>
                                                             previewRecipe(
@@ -477,7 +477,7 @@ export default function RecipesPdf() {
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                         Preview
-                                                    </button>
+                                                    </button> */}
 
                                                     <button
                                                         type="button"
