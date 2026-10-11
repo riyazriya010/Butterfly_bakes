@@ -10,6 +10,7 @@ import {
     Layers3,
     Tags,
     LogOut,
+    BookOpen
 } from "lucide-react";
 import axios from "axios";
 
@@ -34,6 +35,11 @@ const navItems: NavItem[] = [
         label: "Offer Lists",
         href: "/admin-panel/offer",
         icon: Tags,
+    },
+    {
+        label: "Recipes Lists",
+        href: "/admin-panel/recipes",
+        icon: BookOpen,
     },
 ];
 

@@ -1,6 +1,12 @@
 import connectDB from "../lib/mongoose";
 import { AdminRepository } from "../repositories/admin.repository";
 
+import { ObjectId } from "mongodb";
+import type {
+    CreateRecipeData,
+    RecipeListParams,
+} from "../repositories/admin.repository";
+
 const adminRepo = new AdminRepository()
 
 export async function getAdmin() {
@@ -302,4 +308,124 @@ export async function checkAndUpdateeOfferService() {
   connectDB();
 
   return await adminRepo.checkAndUpdateeOffer()
+}
+
+
+
+
+
+// CREATE RECIPE
+export async function createRecipeService(
+    data: CreateRecipeData
+) {
+    await connectDB();
+
+    if (!data.title?.trim()) {
+        throw new Error("RECIPE_TITLE_REQUIRED");
+    }
+
+    if (data.title.trim().length > 120) {
+        throw new Error("RECIPE_TITLE_TOO_LONG");
+    }
+
+    if ((data.description ?? "").length > 500) {
+        throw new Error("RECIPE_DESCRIPTION_TOO_LONG");
+    }
+
+    if (!data.buffer || data.buffer.length === 0) {
+        throw new Error("EMPTY_PDF");
+    }
+
+    const MAX_FILE_SIZE = 15 * 1024 * 1024;
+
+    if (data.buffer.length > MAX_FILE_SIZE) {
+        throw new Error("PDF_TOO_LARGE");
+    }
+
+    // Validate PDF signature.
+    if (
+        data.buffer.length < 5 ||
+        data.buffer.subarray(0, 5).toString("ascii") !== "%PDF-"
+    ) {
+        throw new Error("INVALID_PDF");
+    }
+
+    if (!data.fileName?.trim()) {
+        throw new Error("RECIPE_FILENAME_REQUIRED");
+    }
+
+    return adminRepo.createRecipe({
+        ...data,
+        title: data.title.trim(),
+        description: (data.description ?? "").trim(),
+        fileName: data.fileName.trim(),
+        fileSize: data.buffer.length,
+    });
+}
+
+// GET RECIPE LIST WITH SEARCH AND PAGINATION
+export async function getRecipeListService(
+    params: RecipeListParams
+) {
+    await connectDB();
+
+    const page = Math.max(1, Math.floor(params.page || 1));
+    const limit = Math.min(
+        100,
+        Math.max(1, Math.floor(params.limit || 10))
+    );
+
+    return adminRepo.getRecipeLists({
+        page,
+        limit,
+        search: params.search?.trim() ?? "",
+    });
+}
+
+// GET RECIPE BY ID
+export async function getRecipeByIdService(id: string) {
+    await connectDB();
+
+    if (!ObjectId.isValid(id)) {
+        throw new Error("INVALID_RECIPE_ID");
+    }
+
+    return adminRepo.getRecipeById(id);
+}
+
+// GET RECIPE PDF STREAM
+export async function getRecipeFileStreamService(id: string) {
+    await connectDB();
+
+    if (!ObjectId.isValid(id)) {
+        throw new Error("INVALID_RECIPE_ID");
+    }
+
+    const recipe = await adminRepo.getRecipeById(id);
+
+    if (!recipe) {
+        throw new Error("RECIPE_NOT_FOUND");
+    }
+
+    const stream = adminRepo.getRecipeFileStream(recipe.gridFsId);
+
+    return {
+        recipe,
+        stream,
+    };
+}
+
+// DELETE MULTIPLE RECIPES
+export async function deleteRecipesService(ids: string[]) {
+    await connectDB();
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        throw new Error("RECIPE_IDS_REQUIRED");
+    }
+
+    if (ids.length > 100) {
+        throw new Error("TOO_MANY_RECIPE_IDS");
+    }
+
+    return adminRepo.deleteRecipes(ids);
 }

@@ -4,6 +4,13 @@ import Menu from "../models/menu";
 import Offer from "../models/offer";
 import CakeVariant from "../models/variant";
 
+// RECIPE
+import { ObjectId } from "mongodb";
+import { Readable } from "stream";
+
+import Recipe from "../models/recipe";
+import { getRecipeBucket } from "../lib/gridfs";
+
 
 interface CreateMenuData {
     name: string;
@@ -29,6 +36,55 @@ export interface OfferListParams {
     limit: number;
     search?: string;
 }
+
+
+export interface CreateRecipeData {
+    title: string;
+    description: string;
+    fileName: string;
+    fileSize: number;
+    buffer: Buffer;
+}
+
+export interface RecipeListParams {
+    page: number;
+    limit: number;
+    search?: string;
+}
+
+
+function escapeRecipeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+
+function uploadRecipeBuffer(
+    buffer: Buffer,
+    fileName: string,
+    gridFsId: ObjectId
+): Promise<void> {
+    const bucket = getRecipeBucket();
+
+    return new Promise((resolve, reject) => {
+        const uploadStream = bucket.openUploadStream(
+            fileName,
+            {
+                id: gridFsId,
+                metadata: {
+                    contentType: "application/pdf",
+                    originalFileName: fileName,
+                },
+            }
+        );
+
+        uploadStream.once("error", reject);
+        uploadStream.once("finish", resolve);
+
+        Readable.from(buffer).pipe(uploadStream);
+    });
+}
+
+
 
 
 export class AdminRepository {
@@ -798,5 +854,189 @@ export class AdminRepository {
     }
 
 
+
+
+    // -----------------------------
+    //    RECIPE
+    //--------------------------
+
+    // CREATE RECIPE
+    async createRecipe(data: CreateRecipeData) {
+        const gridFsId = new ObjectId();
+
+        await uploadRecipeBuffer(
+            data.buffer,
+            data.fileName,
+            gridFsId
+        );
+
+        try {
+            return await Recipe.create({
+                title: data.title,
+                description: data.description,
+                fileName: data.fileName,
+                contentType: "application/pdf",
+                gridFsId,
+                fileSize: data.fileSize,
+            });
+        } catch (error) {
+            // Remove the uploaded file if metadata creation fails.
+            try {
+                await getRecipeBucket().delete(gridFsId);
+            } catch (cleanupError) {
+                console.error(
+                    "Failed to clean up GridFS upload:",
+                    cleanupError
+                );
+            }
+
+            throw error;
+        }
+    }
+
+    // GET RECIPE LIST WITH SEARCH AND PAGINATION
+    async getRecipeLists({
+        page,
+        limit,
+        search = "",
+    }: RecipeListParams) {
+        const filter: Record<string, unknown> = {};
+
+        if (search.trim()) {
+            const regex = new RegExp(
+                escapeRecipeRegex(search.trim()),
+                "i"
+            );
+
+            filter.$or = [
+                { title: regex },
+                { fileName: regex },
+                { description: regex },
+            ];
+        }
+
+        const skip = (page - 1) * limit;
+
+        const [recipes, totalItems] = await Promise.all([
+            Recipe.find(filter)
+                .sort({ createdAt: -1, _id: -1 })
+                .skip(skip)
+                .limit(limit)
+                .select(
+                    "title description fileName contentType fileSize createdAt"
+                )
+                .lean(),
+
+            Recipe.countDocuments(filter),
+        ]);
+
+        return {
+            data: recipes.map((recipe) => ({
+                _id: recipe._id.toString(),
+                title: recipe.title,
+                description: recipe.description,
+                fileName: recipe.fileName,
+                contentType: recipe.contentType,
+                fileSize: recipe.fileSize,
+                createdAt: recipe.createdAt,
+                fileUrl: `/api/admin/recipes/${recipe._id}/file`,
+            })),
+
+            pagination: {
+                currentPage: page,
+                totalPages: Math.max(
+                    1,
+                    Math.ceil(totalItems / limit)
+                ),
+                totalItems,
+                limit,
+            },
+        };
+    }
+
+    // FIND RECIPE BY ID
+    async getRecipeById(id: string) {
+        if (!ObjectId.isValid(id)) {
+            return null;
+        }
+
+        return Recipe.findById(id).lean();
+    }
+
+    // GET RECIPE PDF STREAM
+    getRecipeFileStream(gridFsId: ObjectId) {
+        return getRecipeBucket().openDownloadStream(gridFsId);
+    }
+
+    // DELETE MULTIPLE RECIPES
+    async deleteRecipes(ids: string[]) {
+        const validIds = [
+            ...new Set(
+                ids.filter((id) => ObjectId.isValid(id))
+            ),
+        ];
+
+        const invalidIds = ids.filter(
+            (id) => !ObjectId.isValid(id)
+        );
+
+        if (validIds.length === 0) {
+            return {
+                deletedCount: 0,
+                failedIds: [],
+                notFoundIds: [],
+                invalidIds,
+            };
+        }
+
+        const recipes = await Recipe.find({
+            _id: {
+                $in: validIds,
+            },
+        })
+            .select("_id gridFsId")
+            .lean();
+
+        const bucket = getRecipeBucket();
+
+        let deletedCount = 0;
+        const failedIds: string[] = [];
+
+        for (const recipe of recipes) {
+            const recipeId = recipe._id.toString();
+
+            try {
+                // Delete the PDF from GridFS first.
+                await bucket.delete(recipe.gridFsId);
+
+                // Delete the recipe metadata.
+                await Recipe.deleteOne({
+                    _id: recipe._id,
+                });
+
+                deletedCount++;
+            } catch (error) {
+                failedIds.push(recipeId);
+
+                console.error(
+                    `Failed to delete recipe ${recipeId}:`,
+                    error
+                );
+            }
+        }
+
+        const foundIds = new Set(
+            recipes.map((recipe) => recipe._id.toString())
+        );
+
+        return {
+            deletedCount,
+            failedIds,
+            notFoundIds: validIds.filter(
+                (id) => !foundIds.has(id)
+            ),
+            invalidIds,
+        };
+    }
 
 }
