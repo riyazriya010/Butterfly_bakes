@@ -566,7 +566,7 @@ export default function RecipesPdf() {
                                     </div>
 
                                     <div className="mt-4 grid grid-cols-2 gap-3">
-                                        <button
+                                        {/* <button
                                             type="button"
                                             onClick={() =>
                                                 previewRecipe(recipe)
@@ -575,7 +575,7 @@ export default function RecipesPdf() {
                                         >
                                             <Eye className="h-4 w-4" />
                                             Preview
-                                        </button>
+                                        </button> */}
 
                                         <button
                                             type="button"
